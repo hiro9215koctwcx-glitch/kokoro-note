@@ -13,7 +13,8 @@
 body{margin:0;min-height:100dvh;font-family:"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(250,248,245,.98),rgba(250,248,245,.92));backdrop-filter:blur(8px);border-bottom:1px solid rgba(143,163,149,.25);padding:max(14px,env(safe-area-inset-top)) 20px 14px}
 .header-inner{max-width:560px;margin:0 auto}
-.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;width:100%}
+#auth-screen.is-hidden{display:none}
 .logo{font-weight:600;font-size:1.25rem;letter-spacing:.04em}
 .subtitle{width:100%;margin-top:4px;font-size:.8125rem;color:var(--muted)}
 .rally-pill{font-size:.8125rem;color:var(--green-deep);background:var(--bubble);padding:6px 12px;border-radius:999px;white-space:nowrap}
@@ -46,10 +47,48 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .limit-note.visible{display:block}
 .hint{margin-top:8px;font-size:.75rem;color:var(--muted);text-align:center}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.header-actions{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.btn-logout{padding:8px 14px;border-radius:999px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer;box-shadow:0 2px 8px var(--sh)}
+.btn-logout:active{transform:scale(.98)}
+.auth-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom));min-height:100dvh}
+.auth-card{width:100%;max-width:400px;background:var(--white);padding:28px 24px;border-radius:22px;box-shadow:0 12px 40px var(--sh)}
+.auth-title{font-size:1.25rem;font-weight:600;text-align:center;margin:0 0 6px;letter-spacing:.04em}
+.auth-lead{font-size:.875rem;color:var(--muted);text-align:center;margin:0 0 22px;line-height:1.55}
+.auth-field{margin-bottom:14px}
+.auth-field label{display:block;font-size:.8125rem;color:var(--green-deep);margin-bottom:6px;font-weight:500}
+.auth-field input{width:100%;padding:12px 14px;border:1px solid rgba(143,163,149,.45);border-radius:12px;font-family:inherit;font-size:1rem;background:var(--bg)}
+.auth-field input:focus{outline:2px solid rgba(109,133,118,.35)}
+.auth-actions{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.btn-auth-primary{padding:13px;border:none;border-radius:14px;background:var(--green);color:#fff;font-family:inherit;font-weight:600;font-size:.9375rem;cursor:pointer;box-shadow:0 4px 14px rgba(109,133,118,.35)}
+.btn-auth-secondary{padding:13px;border-radius:14px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer}
+.auth-switch{text-align:center;font-size:.8125rem;color:var(--muted);margin-top:14px;line-height:1.5}
+.auth-switch button{border:none;background:none;color:var(--green-deep);text-decoration:underline;cursor:pointer;padding:0;font:inherit}
+.auth-err{font-size:.8125rem;color:#a04444;margin-top:12px;text-align:center}
+#main-app{display:none;flex-direction:column;flex:1;min-height:0}
+#main-app.is-visible{display:flex}
 </style>
 </head>
 <body>
-<header><div class="header-inner"><div class="brand"><span class="logo">こころノート</span><span class="rally-pill" id="rally-display" aria-live="polite">残り 5 回</span></div><p class="subtitle">5分で気持ちを整えるAI</p></div></header>
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <p class="auth-title">こころノート</p>
+    <p class="auth-lead">5分で気持ちを整えるAI<br />メールでログインして始められます。</p>
+    <div id="auth-err" class="auth-err" style="display:none" role="alert"></div>
+    <div class="auth-field"><label for="auth-email">メールアドレス</label><input id="auth-email" type="email" autocomplete="email" required /></div>
+    <div class="auth-field"><label for="auth-password">パスワード</label><input id="auth-password" type="password" autocomplete="current-password" required /></div>
+    <div class="auth-actions">
+      <button type="button" class="btn-auth-primary" id="auth-submit">ログイン</button>
+      <button type="button" class="btn-auth-secondary" id="auth-toggle">アカウントをお持ちでない方（新規登録）</button>
+    </div>
+    <p class="auth-switch"><span id="auth-mode-label">はじめての方は上のボタンから登録できます</span></p>
+  </div>
+</div>
+
+<div id="main-app">
+<header><div class="header-inner"><div class="brand">
+<span class="logo">こころノート</span>
+<div class="header-actions"><span class="rally-pill" id="rally-display" aria-live="polite">残り 5 回</span><button type="button" class="btn-logout" id="btn-logout">ログアウト</button></div>
+</div><p class="subtitle">5分で気持ちを整えるAI</p></div></header>
 <p class="limit-note" id="limit-note" aria-live="assertive"></p>
 <main><div id="chat-log" role="log" aria-label="チャットメッセージ"></div></main>
 <div class="composer-area"><div class="composer-inner"><div class="toolbar">
@@ -60,24 +99,58 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <textarea id="message-input" rows="5" placeholder="気持ちを書いてみましょう" autocomplete="off"></textarea>
 <button type="button" class="btn-send" id="btn-send">送信</button>
 </div><p class="hint">Enter で改行 · Enter を続けて2回で送信</p></div></div>
+</div>
+
 <script>
 (function(){
 "use strict";
-var SK="kokoro-note-rallies-v1",LIM=5,DBL=700;
-var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
+var SESS_KEY="kokoro_session";
+var MSG_SNAP="kokoro_msgs_v1";
+var LIM=5,DBL=700;
+var remainCount=LIM;
+var registerMode=false;
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micOk=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+
+var authScreen=document.getElementById("auth-screen");
+var mainApp=document.getElementById("main-app");
+var authErr=document.getElementById("auth-err");
+var authEmail=document.getElementById("auth-email");
+var authPass=document.getElementById("auth-password");
+var authSubmit=document.getElementById("auth-submit");
+var authToggle=document.getElementById("auth-toggle");
+var btnLogout=document.getElementById("btn-logout");
+
+var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
+
 function resolveApi(rel){try{rel=String(rel||"").replace(/^\/*/,"");var raw=(window.location.pathname||"/").split("?")[0]||"/";if(raw.slice(-1)==="/")return raw+rel;var leaf=raw.slice(raw.lastIndexOf("/")+1);if(leaf.indexOf(".")!==-1){var d=raw.slice(0,raw.lastIndexOf("/")+1);return(d||"/")+rel}return raw+"/"+rel}catch(err){logErr("[API "+rel+"]",err);return"/"+rel}}
 function logErr(scope,err){try{console.error(scope,err&&(err.stack||err.message||err)||err)}catch(e){}}
 window.addEventListener("error",function(ev){try{console.error(ev.message,ev.filename,ev.lineno)}catch(e){}});
 window.addEventListener("unhandledrejection",function(ev){try{console.error("未処理Promise:",ev.reason)}catch(e){}});
 
-function ymd(){var p=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date()),y,m,d,i;for(i=0;i<p.length;i++){if(p[i].type==="year")y=p[i].value;if(p[i].type==="month")m=p[i].value;if(p[i].type==="day")d=p[i].value}return y+"-"+m+"-"+d}
-function readStore(){try{var r=localStorage.getItem(SK);if(!r)return {d:"",n:0};var o=JSON.parse(r);return {d:o.d||"",n:typeof o.n==="number"?o.n:0}}catch(e){return {d:"",n:0}}}
-function writeStore(d,n){try{localStorage.setItem(SK,JSON.stringify({d:d,n:n}))}catch(e){}}
-function usedToday(){var t=ymd(),s=readStore();if(s.d!==t){writeStore(t,0);return 0}return s.n}
-function incUsed(){var t=ymd(),s=readStore();if(s.d!==t)s.n=0;s.d=t;s.n++;writeStore(s.d,s.n)}
-function remain(){return Math.max(0,LIM-usedToday())}
-function updRally(){var r=remain();rallyEl.textContent="残り "+r+" 回";if(r<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の会話回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
+function getTok(){try{var s=sessionStorage.getItem(SESS_KEY);if(!s)return null;var o=JSON.parse(s);return o.access_token||null}catch(e){return null}}
+function userId(){try{var s=sessionStorage.getItem(SESS_KEY);if(!s)return null;var o=JSON.parse(s);if(!o.user)return null;return o.user.id||null}catch(e){return null}}
+function setSession(data){sessionStorage.setItem(SESS_KEY,JSON.stringify(data))}
+function clearSessionAll(){try{sessionStorage.removeItem(SESS_KEY);sessionStorage.removeItem(MSG_SNAP)}catch(e){}}
+
+function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
+
+function renderAllBubbles(){logEl.innerHTML="";var i,m;for(i=0;i<apiMsgs.length;i++){m=apiMsgs[i];if(m.role==="user")addBubble("user",m.content,false);else addBubble("ai",m.content,false)}scrollBot()}
+
+function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)return false;var o=JSON.parse(raw);if(!o.userId||o.userId!==userId()||!Array.isArray(o.messages)||!o.messages.length)return false;apiMsgs=o.messages.slice();if(typeof o.remaining==="number")remainCount=o.remaining;renderAllBubbles();updRallyRemain(remainCount);return true}catch(e){return false}}
+
+function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();if(t)h.Authorization="Bearer "+t;return h}
+
+function remain(){return remainCount}
+function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の会話回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
+
+function showAuthView(){authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
+function showChatView(){authScreen.classList.add("is-hidden");mainApp.classList.add("is-visible")}
+
+function authErrShow(t){authErr.style.display="block";authErr.textContent=t||""}
+function authErrHide(){authErr.style.display="none";authErr.textContent=""}
+
+function syncAuthUi(){authSubmit.textContent=registerMode?"新規登録":"ログイン";authToggle.textContent=registerMode?"ログインへ戻る":"アカウントをお持ちでない方（新規登録）"}
+
 function scrollBot(){requestAnimationFrame(function(){logEl.scrollTop=logEl.scrollHeight})}
 function escapeHtml(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function formatAiBubbleHtml(raw){var s=escapeHtml(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"<strong>$1</strong>");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1<em>$2</em>");s=s.replace(/\n/g,"<br>");return s}
@@ -89,12 +162,61 @@ function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext
 
 function speak(t){if(!ttsOn||!t)return;var url=resolveApi("api/tts"),txt=stripMarkdownForSpeech(t);if(!txt)return;stopAud();fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:txt}),credentials:"same-origin"}).then(function(r){return r.blob().then(function(blob){return{r:r,blob:blob}})}).then(function(x){var hdr=(x.r.headers&&x.r.headers.get&&x.r.headers.get("content-type")||"").toLowerCase(),ct=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;if(!x.r.ok||ct){return x.blob.text().then(function(raw){var j={};try{j=raw?JSON.parse(raw):{}}catch(e){}throw new Error((j&&j.error)||raw||("TTS HTTP "+x.r.status))})}if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");return x.blob}).then(function(blob){var u=URL.createObjectURL(blob),a=new Audio();a.src=u;aud=a;var cleanup=function(){try{URL.revokeObjectURL(u)}catch(e){}a.removeEventListener("ended",cleanup);a.removeEventListener("error",onErr)};var onErr=function(){cleanup();logErr("[TTS 要素エラー]",a.error||"Audio error")};a.addEventListener("ended",cleanup);a.addEventListener("error",onErr);return a.play().then(function(){return null}).catch(function(playErr){cleanup();throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）")})}).catch(function(err){logErr("[TTS] "+url,err)})}
 
-function bootstrapGreet(){
-  var g="こんにちは😊 今日も一日お疲れ様でした。\n今日はどんな1日でしたか？";
-  var opener="今日のことを少し振り返りたいです。よろしくお願いします。";
-  apiMsgs=[{role:"user",content:opener},{role:"assistant",content:g}];
-  addBubble("ai",g);
-  speak(stripMarkdownForSpeech(g.replace(/\n/g," ")));
+function initFromServer(){
+  sending=true;
+  bSend.disabled=true;
+  var opener={role:"user",content:"今日の振り返りを始めたいです。よろしくお願いします。"};
+  fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({init:true,messages:[opener]})})
+    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+    .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||("エラー ("+x.res.status+")"))}
+      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
+      apiMsgs=[opener,{role:"assistant",content:msg}];
+      logEl.innerHTML="";
+      renderAllBubbles();
+      persistSnapshot();
+      if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+      if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));
+      speak(msg);
+    })
+    .catch(function(e){logErr("[init]",e);addBubble("ai",(e&&e.message)||"初回メッセージを取得できませんでした。再読み込みするか、しばらくしてからお試しください。",true)})
+    .finally(function(){sending=false;updRallyRemain(remainCount);try{inp.focus()}catch(z){}}});
+}
+
+function submitAuth(){authErrHide();var em=(authEmail.value||"").trim(),pw=authPass.value||"";if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
+authSubmit.disabled=true;
+fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:registerMode?"signUp":"signIn",email:em,password:pw})})
+  .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+  .then(function(x){if(!x.res.ok)throw new Error((x.j&&x.j.error)||"認証に失敗しました");if(x.j.needEmailConfirm){authErrShow(x.j.message||"確認メールをご確認ください");return}if(!x.j.access_token)throw new Error("トークンを取得できませんでした");
+    sessionStorage.removeItem(MSG_SNAP);
+    var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user};
+    setSession(sess);
+    if(typeof x.j.limit==="number")LIM=x.j.limit;
+    if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+    authPass.value="";
+    showChatView();
+    logEl.innerHTML="";apiMsgs=[];
+    initFromServer();
+  })
+  .catch(function(e){authErrShow(e&&e.message?e.message:"通信エラーです")})
+  .finally(function(){authSubmit.disabled=false});
+}
+
+authToggle.addEventListener("click",function(){registerMode=!registerMode;syncAuthUi();authErrHide()});
+authSubmit.addEventListener("click",submitAuth);
+btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;showAuthView();syncAuthUi();authErrHide();stopAud();inp.value="";updRallyRemain(LIM)});
+
+function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
+fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
+  .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+  .then(function(x){if(!x.res.ok){throw new Error("ng")}
+    if(typeof x.j.limit==="number")LIM=x.j.limit;
+    if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+    showChatView();
+    if(loadSnapshot()){try{inp.focus()}catch(z){};return}
+    logEl.innerHTML="";apiMsgs=[];
+    initFromServer();
+  })
+  .catch(function(){clearSessionAll();showAuthView()});
 }
 
 function send(){
@@ -105,15 +227,14 @@ function send(){
   sending=true;
   bSend.disabled=true;
   inp.value="";
-  updRally();
+  updRallyRemain(remainCount);
   addBubble("user",t);
   apiMsgs.push({role:"user",content:t});
-  fetch(resolveApi("api/chat"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:apiMsgs})})
-    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){j={}}return {res:res,j:j}})})
-    .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||("エラーが発生しました ("+x.res.status+")"))}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");return msg})
-    .then(function(msg){incUsed();apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);speak(msg)})
-    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user")) lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";addBubble("ai",m,true)})
-    .finally(function(){sending=false;updRally()});
+  fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({messages:apiMsgs})})
+    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+    .then(function(x){if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));speak(msg)})
+    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の会話回数に達しました";addBubble("ai",m,true);if(e&&e._status===429)updRallyRemain(0)})
+    .finally(function(){sending=false;updRallyRemain(remainCount)});
 }
 
 inp.addEventListener("input",function(){if(remain()<=0||sending)return;bSend.disabled=!inp.value.trim()});
@@ -134,10 +255,9 @@ function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/
 function stopR(){if(!reco)return;try{reco.stop()}catch(err){}}
 bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if(recOn)stopR();else startR()})}
 
-updRally();
-bootstrapGreet();
+syncAuthUi();
+tryResumeSession();
 ["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});
-inp.focus();
 })();
 </script>
 </body>
