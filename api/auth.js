@@ -3,7 +3,7 @@
  * POST JSON:
  *   { "action":"signUp"|"signIn", "email", "password" }
  * POST ?action=resetPassword JSON: { "email" }
- * POST ?action=updatePassword JSON: { "access_token", "password" }
+ * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining
  */
 
@@ -179,32 +179,98 @@ async function handler(req, res) {
     queryAction === "updatePassword";
 
   if (isUpdatePassword) {
-    const access_token =
+    let access_token =
       typeof body.access_token === "string" ? body.access_token.trim() : "";
+    let refresh_token =
+      typeof body.refresh_token === "string" ? body.refresh_token.trim() : "";
+    const code =
+      typeof body.code === "string" ? body.code.trim() : "";
 
-    if (!access_token || !password) {
-      res.statusCode = 400;
-      return res.end(
-        JSON.stringify({
-          error:
-            "updatePassword には JSON の access_token と password が必要です（POST /api/auth?action=updatePassword）。",
-        })
-      );
-    }
+    const sessionSb = createClient(url, anon, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
 
     try {
-      const sbUser = createUserSupabase(access_token);
-      const { error } = await sbUser.auth.updateUser({ password });
-      if (error) {
+      if (!password) {
         res.statusCode = 400;
         return res.end(
           JSON.stringify({
-            error: error.message || String(error),
-            code: error.code ?? undefined,
-            status: typeof error.status === "number" ? error.status : undefined,
+            error:
+              "updatePassword には JSON の password が必要です（POST /api/auth?action=updatePassword）。",
           })
         );
       }
+
+      if (code) {
+        const {
+          data: exData,
+          error: exErr,
+        } = await sessionSb.auth.exchangeCodeForSession(code);
+
+        if (exErr || !exData?.session) {
+          res.statusCode = 400;
+          return res.end(
+            JSON.stringify({
+              error:
+                exErr?.message ||
+                "認証コード（code）の検証・交換に失敗しました。",
+              code: exErr?.code ?? undefined,
+              status:
+                typeof exErr?.status === "number" ? exErr.status : undefined,
+            })
+          );
+        }
+
+        access_token = exData.session.access_token || access_token;
+        refresh_token =
+          exData.session.refresh_token || refresh_token || "";
+      }
+
+      if (!access_token) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error:
+              "access_token と refresh_token、または OAuth/PKCE 用の code が必要です。",
+          })
+        );
+      }
+
+      const { error: setErr } = await sessionSb.auth.setSession({
+        access_token,
+        refresh_token: refresh_token || "",
+      });
+
+      if (setErr) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error: setErr.message || String(setErr),
+            code: setErr.code ?? undefined,
+            status: typeof setErr.status === "number" ? setErr.status : undefined,
+          })
+        );
+      }
+
+      const { error: updErr } = await sessionSb.auth.updateUser({
+        password,
+      });
+
+      if (updErr) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error: updErr.message || String(updErr),
+            code: updErr.code ?? undefined,
+            status: typeof updErr.status === "number" ? updErr.status : undefined,
+          })
+        );
+      }
+
       res.statusCode = 200;
       return res.end(JSON.stringify({ success: true }));
     } catch (err) {
@@ -234,7 +300,7 @@ async function handler(req, res) {
     return res.end(
       JSON.stringify({
         error:
-          "action(signUp/signIn)、email、password が必要です。パスワードリセットは POST /api/auth?action=resetPassword と email のみ、パスワード更新は ?action=updatePassword と access_token / password のみです。",
+          "action(signUp/signIn)、email、password が必要です。パスワードリセットは POST /api/auth?action=resetPassword と email のみ、パスワード更新は ?action=updatePassword と password に加え access_token+refresh_token または code を JSON で送ってください。",
       })
     );
   }
