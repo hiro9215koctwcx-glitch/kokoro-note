@@ -1,6 +1,8 @@
 /**
  * メールログイン・登録・セション確認（Supabase Auth／サーバー側のみ）
- * POST JSON: { "action":"signUp"|"signIn", "email", "password" }
+ * POST JSON:
+ *   { "action":"signUp"|"signIn", "email", "password" }
+ * POST ?action=resetPassword JSON: { "email" }
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining
  */
 
@@ -27,6 +29,17 @@ function getBearer(req) {
   const h = req.headers?.authorization || req.headers?.Authorization || "";
   const m = String(h).match(/^Bearer\s+(\S+)/i);
   return m ? m[1].trim() : "";
+}
+
+function getQueryParam(req, key) {
+  try {
+    const raw = typeof req.url === "string" ? req.url : "";
+    const qi = raw.indexOf("?");
+    const queryString = qi === -1 ? "" : raw.slice(qi + 1);
+    return new URLSearchParams(queryString).get(key);
+  } catch {
+    return null;
+  }
 }
 
 async function handler(req, res) {
@@ -108,15 +121,71 @@ async function handler(req, res) {
     return res.end(JSON.stringify({ error: "JSONの形式が正しくありません。" }));
   }
 
-  const action = body.action === "signUp" ? "signUp" : body.action === "signIn" ? "signIn" : null;
+  const RESET_REDIRECT_TO = "https://kokoro-note-umber.vercel.app";
+  const queryAction = getQueryParam(req, "action");
+
   const email = typeof body.email === "string" ? body.email.trim() : "";
-  const password = typeof body.password === "string" ? body.password : "";
+  const password =
+    typeof body.password === "string" ? body.password : "";
+
+  const isResetPassword =
+    body.action === "resetPassword" ||
+    queryAction === "resetPassword";
+
+  if (isResetPassword) {
+    if (!email) {
+      res.statusCode = 400;
+      return res.end(
+        JSON.stringify({
+          error:
+            'パスワードリセットには query「action=resetPassword」と JSON ボディの「email」が必要です。',
+        })
+      );
+    }
+    try {
+      const { error } = await adminSb.auth.resetPasswordForEmail(email, {
+        redirectTo: RESET_REDIRECT_TO,
+      });
+      if (error) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error: error.message || String(error),
+            code: error.code ?? undefined,
+            status: typeof error.status === "number" ? error.status : undefined,
+          })
+        );
+      }
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      console.error("[auth resetPassword]", err);
+      const message =
+        err instanceof Error ? err.message : String(err ?? "unknown error");
+      res.statusCode = 500;
+      return res.end(
+        JSON.stringify({
+          error:
+            message ||
+            "パスワードリセットメールの送信処理中にサーバー側でエラーが発生しました。",
+        })
+      );
+    }
+  }
+
+  const action =
+    body.action === "signUp"
+      ? "signUp"
+      : body.action === "signIn"
+      ? "signIn"
+      : null;
 
   if (!action || !email || !password) {
     res.statusCode = 400;
     return res.end(
       JSON.stringify({
-        error: "action(signUp/signIn)、email、password が必要です。",
+        error:
+          "action(signUp/signIn)、email、password が必要です。パスワードリセットは POST /api/auth?action=resetPassword と email のみです。",
       })
     );
   }

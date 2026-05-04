@@ -3,9 +3,6 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<!-- パスワードリセット用（ブラウザから Supabase Recover API を叩くとき）。サーバー側 /api/auth に recover を用意している場合は空のままで可。 -->
-<meta name="kokoro-supabase-url" content="" />
-<meta name="kokoro-supabase-anon" content="" />
 <title>こころノート</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -147,6 +144,8 @@ var btnLogout=document.getElementById("btn-logout");
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 
 function resolveApi(rel){try{rel=String(rel||"").replace(/^\/*/,"");var raw=(window.location.pathname||"/").split("?")[0]||"/";if(raw.slice(-1)==="/")return raw+rel;var leaf=raw.slice(raw.lastIndexOf("/")+1);if(leaf.indexOf(".")!==-1){var d=raw.slice(0,raw.lastIndexOf("/")+1);return(d||"/")+rel}return raw+"/"+rel}catch(err){logErr("[API "+rel+"]",err);return"/"+rel}}
+function authResetPasswordUrl(){var b=resolveApi("api/auth");return b.indexOf("?")>=0?b+"&action=resetPassword":b+"?action=resetPassword"}
+function resetPasswordViaApi(email){return fetch(authResetPasswordUrl(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email}),credentials:"same-origin"}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})}).then(function(x){if(!x.res.ok){var m=(x.j&&x.j.error)||("HTTP "+x.res.status);if(x.j&&x.j.code)m+=" （code:"+x.j.code+"）";if(typeof x.j.status==="number")m+=" （status:"+x.j.status+"）";throw new Error(m.trim());}if(!x.j||x.j.success!==true)throw new Error((x.j&&x.j.error)||"パスワードリセットメールを送信できませんでした");})}
 function logErr(scope,err){try{console.error(scope,err&&(err.stack||err.message||err)||err)}catch(e){}}
 window.addEventListener("error",function(ev){try{console.error(ev.message,ev.filename,ev.lineno)}catch(e){}});
 window.addEventListener("unhandledrejection",function(ev){try{console.error("未処理Promise:",ev.reason)}catch(e){}});
@@ -175,28 +174,6 @@ function authErrHide(){authErr.style.display="none";authErr.textContent=""}
 function authSuccessShow(t){authSucc.style.display="block";authSucc.textContent=t||""}
 function authSuccessHide(){authSucc.style.display="none";authSucc.textContent=""}
 
-function getSbCreds(){
-  try{
-    var mu=document.querySelector('meta[name="kokoro-supabase-url"]'),ma=document.querySelector('meta[name="kokoro-supabase-anon"]');
-    var u=(mu&&mu.getAttribute&&mu.getAttribute("content")||"").trim(),a=(ma&&ma.getAttribute&&ma.getAttribute("content")||"").trim();
-    if(u&&a)return{url:u,anon:a};
-    var gl=window.KOKORO_PUBLIC_SUPABASE||{};u=String(gl.url||"").trim();a=String(gl.anon||"").trim();
-    if(u&&a)return{url:u,anon:a};
-  }catch(e){}
-  return{url:"",anon:""};
-}
-function recoverViaRest(email,creds){
-  var base=String(creds.url).replace(/\/$/,"");
-  return fetch(base+"/auth/v1/recover",{method:"POST",headers:{apikey:creds.anon,Authorization:"Bearer "+creds.anon,"Content-Type":"application/json"},body:JSON.stringify({email:email})}).then(function(res){return res.text().then(function(txt){var j={};if(txt)try{j=JSON.parse(txt)}catch(e){}return{res:res,j:j};})}).then(function(x){if(!x.res.ok){var m=(x.j&&x.j.message)||(x.j&&x.j.error_description)||(x.j&&x.j.msg)||(x.j&&x.j.error)||"リセットメールの送信に失敗しました";throw new Error(m);}});
-}
-function recoverViaApi(email){
-  return fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recover",email:email})}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})}).then(function(x){if(x.res.ok)return;var er=(x.j&&x.j.error)||"";if(/signUp|signIn|password|action\s*\(|email、password/i.test(er))throw new Error("META");throw new Error(er||("HTTP "+x.res.status));});
-}
-function tryRecover(email){
-  var c=getSbCreds();
-  if(c.url&&c.anon)return recoverViaRest(email,c);
-  return recoverViaApi(email).catch(function(e){if(e&&e.message==="META")throw new Error('パスワードリセットには、ページの<head>にあるメタ「kokoro-supabase-url」「kokoro-supabase-anon」に Supabase の Project URL と匿名（anon）公開キーを設定してください。');throw e});
-}
 function applyPassVisibility(){authPass.type=passVisible?"text":"password";if(authPassEye){authPassEye.setAttribute("aria-pressed",passVisible?"true":"false");authPassEye.setAttribute("aria-label",passVisible?"パスワードを隠す":"パスワードを表示")}}
 
 function syncAuthUi(){
@@ -237,7 +214,7 @@ function initFromServer(){
 
 function submitRecover(){authErrHide();authSuccessHide();var em=(authEmail.value||"").trim();if(!em){authErrShow("メールアドレスを入力してください");return}
 authSubmit.disabled=true;
-tryRecover(em).then(function(){authSuccessShow("パスワードリセットメールを送信しました")}).catch(function(e){authErrShow(e&&e.message?e.message:"送信に失敗しました")}).finally(function(){authSubmit.disabled=false});
+resetPasswordViaApi(em).then(function(){authSuccessShow("パスワードリセットメールを送信しました")}).catch(function(e){authErrShow(e&&e.message?e.message:"送信に失敗しました")}).finally(function(){authSubmit.disabled=false});
 }
 function submitAuth(){authErrHide();authSuccessHide();if(resetMode){submitRecover();return}var em=(authEmail.value||"").trim(),pw=authPass.value||"";if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
 authSubmit.disabled=true;
