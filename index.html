@@ -168,8 +168,7 @@ function initFromServer(){
   var opener={role:"user",content:"今日の振り返りを始めたいです。よろしくお願いします。"};
   fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({init:true,messages:[opener]})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-    .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||("エラー ("+x.res.status+")"))}
-      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
+    .then(function(x){if(!x.res.ok){throw new Error(String((x.j&&x.j.error)||"[chat-init] "+x.res.status));}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
       apiMsgs=[opener,{role:"assistant",content:msg}];
       logEl.innerHTML="";
       renderAllBubbles();
@@ -178,8 +177,8 @@ function initFromServer(){
       if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));
       speak(msg);
     })
-    .catch(function(e){logErr("[init]",e);addBubble("ai",(e&&e.message)||"初回メッセージを取得できませんでした。再読み込みするか、しばらくしてからお試しください。",true)})
-    .finally(function(){sending=false;updRallyRemain(remainCount);try{inp.focus()}catch(z){}}});
+    .catch(function(e){logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",(e&&e.message)?e.message:fb,true)})
+    .finally(function(){sending=false;updRallyRemain(remainCount);try{inp.focus()}catch(z){}});
 }
 
 function submitAuth(){authErrHide();var em=(authEmail.value||"").trim(),pw=authPass.value||"";if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
@@ -208,8 +207,7 @@ btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl
 function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
   .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-  .then(function(x){if(!x.res.ok){throw new Error("ng")}
-    if(typeof x.j.limit==="number")LIM=x.j.limit;
+  .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
     if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
     showChatView();
     if(loadSnapshot()){try{inp.focus()}catch(z){};return}
