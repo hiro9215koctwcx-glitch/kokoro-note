@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<!-- パスワードリセット用（ブラウザから Supabase Recover API を叩くとき）。サーバー側 /api/auth に recover を用意している場合は空のままで可。 -->
+<meta name="kokoro-supabase-url" content="" />
+<meta name="kokoro-supabase-anon" content="" />
 <title>こころノート</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -58,6 +61,15 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .auth-field label{display:block;font-size:.8125rem;color:var(--green-deep);margin-bottom:6px;font-weight:500}
 .auth-field input{width:100%;padding:12px 14px;border:1px solid rgba(143,163,149,.45);border-radius:12px;font-family:inherit;font-size:1rem;background:var(--bg)}
 .auth-field input:focus{outline:2px solid rgba(109,133,118,.35)}
+.auth-pass-wrap{position:relative;display:block}
+.auth-pass-wrap .auth-pass-field{width:100%;padding-right:46px;padding-top:12px;padding-bottom:12px;padding-left:14px}
+.auth-pass-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:40px;height:40px;margin:0;border:none;background:rgba(250,248,245,.92);cursor:pointer;font-size:1.15rem;line-height:1;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);box-shadow:none}
+.auth-pass-eye:focus{outline:2px solid rgba(109,133,118,.35)}
+.auth-hide{display:none !important}
+.auth-muted-row{text-align:center;margin-top:12px;margin-bottom:0}
+.auth-link-muted{border:none;background:none;color:#898989;font-size:.78rem;cursor:pointer;padding:6px 8px;text-decoration:underline;text-underline-offset:3px;font-family:inherit}
+.auth-link-muted:active{opacity:.85}
+.auth-success-msg{font-size:.875rem;color:var(--green-deep);margin-top:12px;line-height:1.55;text-align:center}
 .auth-actions{display:flex;flex-direction:column;gap:10px;margin-top:8px}
 .btn-auth-primary{padding:13px;border:none;border-radius:14px;background:var(--green);color:#fff;font-family:inherit;font-weight:600;font-size:.9375rem;cursor:pointer;box-shadow:0 4px 14px rgba(109,133,118,.35)}
 .btn-auth-secondary{padding:13px;border-radius:14px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer}
@@ -72,15 +84,17 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <div id="auth-screen" class="auth-screen">
   <div class="auth-card">
     <p class="auth-title">こころノート</p>
-    <p class="auth-lead">5分で気持ちを整えるAI<br />メールでログインして始められます。</p>
+    <p class="auth-lead" id="auth-lead">5分で気持ちを整えるAI<br />メールでログインして始められます。</p>
     <div id="auth-err" class="auth-err" style="display:none" role="alert"></div>
+    <div id="auth-success" class="auth-success-msg" style="display:none" role="status"></div>
     <div class="auth-field"><label for="auth-email">メールアドレス</label><input id="auth-email" type="email" autocomplete="email" required /></div>
-    <div class="auth-field"><label for="auth-password">パスワード</label><input id="auth-password" type="password" autocomplete="current-password" required /></div>
+    <div id="auth-field-password" class="auth-field"><label for="auth-password">パスワード</label><div class="auth-pass-wrap"><input id="auth-password" class="auth-pass-field" type="text" autocomplete="current-password" required /><button type="button" class="auth-pass-eye" id="auth-pass-eye" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
     <div class="auth-actions">
       <button type="button" class="btn-auth-primary" id="auth-submit">ログイン</button>
       <button type="button" class="btn-auth-secondary" id="auth-toggle">アカウントをお持ちでない方（新規登録）</button>
     </div>
-    <p class="auth-switch"><span id="auth-mode-label">はじめての方は上のボタンから登録できます</span></p>
+    <div id="auth-forgot-row" class="auth-muted-row"><button type="button" id="auth-forgot" class="auth-link-muted">パスワードをお忘れの方</button></div>
+    <div id="auth-back-reset-row" class="auth-muted-row auth-hide"><button type="button" id="auth-back-login" class="auth-link-muted">ログイン画面に戻る</button></div>
   </div>
 </div>
 
@@ -108,16 +122,26 @@ var SESS_KEY="kokoro_session";
 var MSG_SNAP="kokoro_msgs_v1";
 var LIM=5,DBL=700;
 var remainCount=LIM;
-var registerMode=false;
+var registerMode=false,resetMode=false,passVisible=true;
+var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログインして始められます。";
+var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再設定用のリンクをお送りします。";
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micOk=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
 
 var authScreen=document.getElementById("auth-screen");
 var mainApp=document.getElementById("main-app");
 var authErr=document.getElementById("auth-err");
+var authSucc=document.getElementById("auth-success");
+var authLead=document.getElementById("auth-lead");
 var authEmail=document.getElementById("auth-email");
 var authPass=document.getElementById("auth-password");
 var authSubmit=document.getElementById("auth-submit");
 var authToggle=document.getElementById("auth-toggle");
+var authFieldPw=document.getElementById("auth-field-password");
+var authForgotRow=document.getElementById("auth-forgot-row");
+var authForgot=document.getElementById("auth-forgot");
+var authBackResetRow=document.getElementById("auth-back-reset-row");
+var authBackLogin=document.getElementById("auth-back-login");
+var authPassEye=document.getElementById("auth-pass-eye");
 var btnLogout=document.getElementById("btn-logout");
 
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
@@ -148,8 +172,38 @@ function showChatView(){authScreen.classList.add("is-hidden");mainApp.classList.
 
 function authErrShow(t){authErr.style.display="block";authErr.textContent=t||""}
 function authErrHide(){authErr.style.display="none";authErr.textContent=""}
+function authSuccessShow(t){authSucc.style.display="block";authSucc.textContent=t||""}
+function authSuccessHide(){authSucc.style.display="none";authSucc.textContent=""}
 
-function syncAuthUi(){authSubmit.textContent=registerMode?"新規登録":"ログイン";authToggle.textContent=registerMode?"ログインへ戻る":"アカウントをお持ちでない方（新規登録）"}
+function getSbCreds(){
+  try{
+    var mu=document.querySelector('meta[name="kokoro-supabase-url"]'),ma=document.querySelector('meta[name="kokoro-supabase-anon"]');
+    var u=(mu&&mu.getAttribute&&mu.getAttribute("content")||"").trim(),a=(ma&&ma.getAttribute&&ma.getAttribute("content")||"").trim();
+    if(u&&a)return{url:u,anon:a};
+    var gl=window.KOKORO_PUBLIC_SUPABASE||{};u=String(gl.url||"").trim();a=String(gl.anon||"").trim();
+    if(u&&a)return{url:u,anon:a};
+  }catch(e){}
+  return{url:"",anon:""};
+}
+function recoverViaRest(email,creds){
+  var base=String(creds.url).replace(/\/$/,"");
+  return fetch(base+"/auth/v1/recover",{method:"POST",headers:{apikey:creds.anon,Authorization:"Bearer "+creds.anon,"Content-Type":"application/json"},body:JSON.stringify({email:email})}).then(function(res){return res.text().then(function(txt){var j={};if(txt)try{j=JSON.parse(txt)}catch(e){}return{res:res,j:j};})}).then(function(x){if(!x.res.ok){var m=(x.j&&x.j.message)||(x.j&&x.j.error_description)||(x.j&&x.j.msg)||(x.j&&x.j.error)||"リセットメールの送信に失敗しました";throw new Error(m);}});
+}
+function recoverViaApi(email){
+  return fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recover",email:email})}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})}).then(function(x){if(x.res.ok)return;var er=(x.j&&x.j.error)||"";if(/signUp|signIn|password|action\s*\(|email、password/i.test(er))throw new Error("META");throw new Error(er||("HTTP "+x.res.status));});
+}
+function tryRecover(email){
+  var c=getSbCreds();
+  if(c.url&&c.anon)return recoverViaRest(email,c);
+  return recoverViaApi(email).catch(function(e){if(e&&e.message==="META")throw new Error('パスワードリセットには、ページの<head>にあるメタ「kokoro-supabase-url」「kokoro-supabase-anon」に Supabase の Project URL と匿名（anon）公開キーを設定してください。');throw e});
+}
+function applyPassVisibility(){authPass.type=passVisible?"text":"password";if(authPassEye){authPassEye.setAttribute("aria-pressed",passVisible?"true":"false");authPassEye.setAttribute("aria-label",passVisible?"パスワードを隠す":"パスワードを表示")}}
+
+function syncAuthUi(){
+  if(resetMode){authLead.textContent=MSG_RESET_LEAD;authFieldPw.classList.add("auth-hide");authForgotRow.classList.add("auth-hide");authToggle.classList.add("auth-hide");authBackResetRow.classList.remove("auth-hide");authSubmit.textContent="パスワードリセットメールを送信する"}
+  else{authLead.innerHTML=LEAD_HTML_DEFAULT;authFieldPw.classList.remove("auth-hide");authToggle.classList.remove("auth-hide");authForgotRow.classList.toggle("auth-hide",registerMode);authBackResetRow.classList.add("auth-hide");authSubmit.textContent=registerMode?"新規登録":"ログイン";authToggle.textContent=registerMode?"ログインへ戻る":"アカウントをお持ちでない方（新規登録）"}
+  applyPassVisibility();
+}
 
 function scrollBot(){requestAnimationFrame(function(){logEl.scrollTop=logEl.scrollHeight})}
 function escapeHtml(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
@@ -181,7 +235,11 @@ function initFromServer(){
     .finally(function(){sending=false;updRallyRemain(remainCount);try{inp.focus()}catch(z){}});
 }
 
-function submitAuth(){authErrHide();var em=(authEmail.value||"").trim(),pw=authPass.value||"";if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
+function submitRecover(){authErrHide();authSuccessHide();var em=(authEmail.value||"").trim();if(!em){authErrShow("メールアドレスを入力してください");return}
+authSubmit.disabled=true;
+tryRecover(em).then(function(){authSuccessShow("パスワードリセットメールを送信しました")}).catch(function(e){authErrShow(e&&e.message?e.message:"送信に失敗しました")}).finally(function(){authSubmit.disabled=false});
+}
+function submitAuth(){authErrHide();authSuccessHide();if(resetMode){submitRecover();return}var em=(authEmail.value||"").trim(),pw=authPass.value||"";if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
 authSubmit.disabled=true;
 fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:registerMode?"signUp":"signIn",email:em,password:pw})})
   .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
@@ -200,9 +258,12 @@ fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application
   .finally(function(){authSubmit.disabled=false});
 }
 
-authToggle.addEventListener("click",function(){registerMode=!registerMode;syncAuthUi();authErrHide()});
+authToggle.addEventListener("click",function(){registerMode=!registerMode;resetMode=false;syncAuthUi();authErrHide();authSuccessHide()});
+authForgot.addEventListener("click",function(){resetMode=true;registerMode=false;syncAuthUi();authErrHide();authSuccessHide()});
+authBackLogin.addEventListener("click",function(){resetMode=false;syncAuthUi();authErrHide();authSuccessHide()});
+authPassEye.addEventListener("click",function(){passVisible=!passVisible;applyPassVisibility()});
 authSubmit.addEventListener("click",submitAuth);
-btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;showAuthView();syncAuthUi();authErrHide();stopAud();inp.value="";updRallyRemain(LIM)});
+btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM)});
 
 function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
