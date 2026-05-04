@@ -64,6 +64,10 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 var SK="kokoro-note-rallies-v1",LIM=5,DBL=700;
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micOk=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+function resolveApi(rel){try{rel=String(rel||"").replace(/^\/*/,"");var raw=(window.location.pathname||"/").split("?")[0]||"/";if(raw.slice(-1)==="/")return raw+rel;var leaf=raw.slice(raw.lastIndexOf("/")+1);if(leaf.indexOf(".")!==-1){var d=raw.slice(0,raw.lastIndexOf("/")+1);return(d||"/")+rel}return raw+"/"+rel}catch(err){logErr("[API "+rel+"]",err);return"/"+rel}}
+function logErr(scope,err){try{console.error(scope,err&&(err.stack||err.message||err)||err)}catch(e){}}
+window.addEventListener("error",function(ev){try{console.error(ev.message,ev.filename,ev.lineno)}catch(e){}});
+window.addEventListener("unhandledrejection",function(ev){try{console.error("未処理Promise:",ev.reason)}catch(e){}});
 
 function ymd(){var p=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date()),y,m,d,i;for(i=0;i<p.length;i++){if(p[i].type==="year")y=p[i].value;if(p[i].type==="month")m=p[i].value;if(p[i].type==="day")d=p[i].value}return y+"-"+m+"-"+d}
 function readStore(){try{var r=localStorage.getItem(SK);if(!r)return {d:"",n:0};var o=JSON.parse(r);return {d:o.d||"",n:typeof o.n==="number"?o.n:0}}catch(e){return {d:"",n:0}}}
@@ -75,7 +79,10 @@ function updRally(){var r=remain();rallyEl.textContent="残り "+r+" 回";if(r<=
 function scrollBot(){requestAnimationFrame(function(){logEl.scrollTop=logEl.scrollHeight})}
 function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");b.textContent=text;row.appendChild(b);logEl.appendChild(row);scrollBot()}
 function stopAud(){try{if(aud){aud.pause();aud.src=""}}catch(e){}aud=null}
-function speak(t){if(!ttsOn||!t)return;stopAud();fetch("/api/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:String(t).replace(/\s+/g," ").trim()})}).then(function(r){if(!r.ok)return r.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){j={}}throw new Error((j&&j.error)||"音声を再生できませんでした")});return r.blob()}).then(function(blob){var u=URL.createObjectURL(blob);var a=new Audio(u);aud=a;a.addEventListener("ended",function(){URL.revokeObjectURL(u)});return a.play()}).catch(function(){})}
+var ttsPrimed=false;
+function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var ctx=new AC();var resume=ctx.resume&&ctx.resume.bind(ctx);if(resume){resume().catch(function(){})}var osc=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=0;osc.connect(gain);gain.connect(ctx.destination);osc.start(0);osc.stop(ctx.currentTime+0.02)}}catch(e){logErr("[TTS prime]",e)}finally{ttsPrimed=true}}
+
+function speak(t){if(!ttsOn||!t)return;var url=resolveApi("api/tts"),txt=String(t).replace(/\s+/g," ").trim();if(!txt)return;stopAud();fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:txt}),credentials:"same-origin"}).then(function(r){return r.blob().then(function(blob){return{r:r,blob:blob}})}).then(function(x){var hdr=(x.r.headers&&x.r.headers.get&&x.r.headers.get("content-type")||"").toLowerCase(),ct=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;if(!x.r.ok||ct){return x.blob.text().then(function(raw){var j={};try{j=raw?JSON.parse(raw):{}}catch(e){}throw new Error((j&&j.error)||raw||("TTS HTTP "+x.r.status))})}if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");return x.blob}).then(function(blob){var u=URL.createObjectURL(blob),a=new Audio();a.src=u;aud=a;var cleanup=function(){try{URL.revokeObjectURL(u)}catch(e){}a.removeEventListener("ended",cleanup);a.removeEventListener("error",onErr)};var onErr=function(){cleanup();logErr("[TTS 要素エラー]",a.error||"Audio error")};a.addEventListener("ended",cleanup);a.addEventListener("error",onErr);return a.play().then(function(){return null}).catch(function(playErr){cleanup();throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）")})}).catch(function(err){logErr("[TTS] "+url,err)})}
 
 function bootstrapGreet(){
   var g="こんにちは😊 今日も一日お疲れ様でした。\n今日はどんな1日でしたか？";
@@ -86,6 +93,7 @@ function bootstrapGreet(){
 }
 
 function send(){
+  primeAudioPlayback();
   var t=(inp.value||"").trim();
   if(!t||sending)return;
   if(remain()<=0)return;
@@ -95,7 +103,7 @@ function send(){
   updRally();
   addBubble("user",t);
   apiMsgs.push({role:"user",content:t});
-  fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:apiMsgs})})
+  fetch(resolveApi("api/chat"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:apiMsgs})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){j={}}return {res:res,j:j}})})
     .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||("エラーが発生しました ("+x.res.status+")"))}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");return msg})
     .then(function(msg){incUsed();apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);speak(msg)})
@@ -111,7 +119,7 @@ inp.addEventListener("keydown",function(ev){if(ev.key!=="Enter"||ev.shiftKey){la
 
 bSend.addEventListener("click",function(){if(remain()>0&&!sending)send()});
 
-bTts.addEventListener("click",function(){ttsOn=!ttsOn;bTts.setAttribute("aria-pressed",ttsOn?"true":"false");if(ttsOn){bTts.classList.add("tts-on");bTts.textContent="読み上げ ON"}else{bTts.classList.remove("tts-on");bTts.textContent="読み上げ OFF";stopAud()}});
+bTts.addEventListener("click",function(){ttsOn=!ttsOn;bTts.setAttribute("aria-pressed",ttsOn?"true":"false");if(ttsOn){primeAudioPlayback();bTts.classList.add("tts-on");bTts.textContent="読み上げ ON"}else{bTts.classList.remove("tts-on");bTts.textContent="読み上げ OFF";stopAud()}});
 
 var SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(!micOk){bMic.disabled=true;bMic.title="お使いのブラウザは音声入力に対応していません"}else{
@@ -123,6 +131,7 @@ bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if
 
 updRally();
 bootstrapGreet();
+["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});
 inp.focus();
 })();
 </script>

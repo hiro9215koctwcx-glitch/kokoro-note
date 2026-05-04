@@ -80,6 +80,7 @@ async function handler(req, res) {
       } catch {
         /* ignore */
       }
+      console.error("[api/tts] OpenAI失敗:", errMsg);
       res.statusCode = response.status >= 500 ? 502 : response.status;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       return res.end(JSON.stringify({ error: errMsg }));
@@ -90,7 +91,8 @@ async function handler(req, res) {
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
     return res.end(buf);
-  } catch {
+  } catch (err) {
+    console.error("[api/tts] 音声取得エラー:", err);
     res.statusCode = 502;
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     return res.end(
