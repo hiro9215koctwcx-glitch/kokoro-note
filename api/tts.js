@@ -4,7 +4,7 @@
  */
 
 const MODEL = "tts-1";
-const VOICE = "nova";
+const VOICE = "shimmer";
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
