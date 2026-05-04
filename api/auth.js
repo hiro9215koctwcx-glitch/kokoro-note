@@ -3,6 +3,7 @@
  * POST JSON:
  *   { "action":"signUp"|"signIn", "email", "password" }
  * POST ?action=resetPassword JSON: { "email" }
+ * POST ?action=updatePassword JSON: { "access_token", "password" }
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining
  */
 
@@ -173,6 +174,54 @@ async function handler(req, res) {
     }
   }
 
+  const isUpdatePassword =
+    body.action === "updatePassword" ||
+    queryAction === "updatePassword";
+
+  if (isUpdatePassword) {
+    const access_token =
+      typeof body.access_token === "string" ? body.access_token.trim() : "";
+
+    if (!access_token || !password) {
+      res.statusCode = 400;
+      return res.end(
+        JSON.stringify({
+          error:
+            "updatePassword には JSON の access_token と password が必要です（POST /api/auth?action=updatePassword）。",
+        })
+      );
+    }
+
+    try {
+      const sbUser = createUserSupabase(access_token);
+      const { error } = await sbUser.auth.updateUser({ password });
+      if (error) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error: error.message || String(error),
+            code: error.code ?? undefined,
+            status: typeof error.status === "number" ? error.status : undefined,
+          })
+        );
+      }
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      console.error("[auth updatePassword]", err);
+      const message =
+        err instanceof Error ? err.message : String(err ?? "unknown error");
+      res.statusCode = 500;
+      return res.end(
+        JSON.stringify({
+          error:
+            message ||
+            "パスワードの更新処理中にサーバー側でエラーが発生しました。",
+        })
+      );
+    }
+  }
+
   const action =
     body.action === "signUp"
       ? "signUp"
@@ -185,7 +234,7 @@ async function handler(req, res) {
     return res.end(
       JSON.stringify({
         error:
-          "action(signUp/signIn)、email、password が必要です。パスワードリセットは POST /api/auth?action=resetPassword と email のみです。",
+          "action(signUp/signIn)、email、password が必要です。パスワードリセットは POST /api/auth?action=resetPassword と email のみ、パスワード更新は ?action=updatePassword と access_token / password のみです。",
       })
     );
   }

@@ -79,7 +79,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 </head>
 <body>
 <div id="auth-screen" class="auth-screen">
-  <div class="auth-card">
+  <div id="auth-login-card" class="auth-card">
     <p class="auth-title">こころノート</p>
     <p class="auth-lead" id="auth-lead">5分で気持ちを整えるAI<br />メールでログインして始められます。</p>
     <div id="auth-err" class="auth-err" style="display:none" role="alert"></div>
@@ -92,6 +92,14 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     </div>
     <div id="auth-forgot-row" class="auth-muted-row"><button type="button" id="auth-forgot" class="auth-link-muted">パスワードをお忘れの方</button></div>
     <div id="auth-back-reset-row" class="auth-muted-row auth-hide"><button type="button" id="auth-back-login" class="auth-link-muted">ログイン画面に戻る</button></div>
+  </div>
+  <div id="auth-update-card" class="auth-card auth-hide">
+    <p class="auth-title" id="upd-heading">新しいパスワードを設定</p>
+    <div id="upd-err" class="auth-err" style="display:none" role="alert"></div>
+    <div id="upd-success" class="auth-success-msg" style="display:none" role="status"></div>
+    <div class="auth-field"><label for="upd-pass1">新しいパスワード</label><div class="auth-pass-wrap"><input id="upd-pass1" class="auth-pass-field" type="text" autocomplete="new-password" /><button type="button" class="auth-pass-eye" id="upd-eye1" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
+    <div class="auth-field"><label for="upd-pass2">パスワード確認</label><div class="auth-pass-wrap"><input id="upd-pass2" class="auth-pass-field" type="text" autocomplete="new-password" /><button type="button" class="auth-pass-eye" id="upd-eye2" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
+    <div class="auth-actions"><button type="button" class="btn-auth-primary" id="upd-submit">パスワードを更新する</button></div>
   </div>
 </div>
 
@@ -119,12 +127,15 @@ var SESS_KEY="kokoro_session";
 var MSG_SNAP="kokoro_msgs_v1";
 var LIM=5,DBL=700;
 var remainCount=LIM;
-var registerMode=false,resetMode=false,passVisible=true;
+var registerMode=false,resetMode=false,passVisible=true,passVisibleUpd1=true,passVisibleUpd2=true;
+var recoveryAccessToken=null,updReturnTimer=null;
 var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログインして始められます。";
 var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再設定用のリンクをお送りします。";
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micOk=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
 
 var authScreen=document.getElementById("auth-screen");
+var authLoginCard=document.getElementById("auth-login-card");
+var authUpdateCard=document.getElementById("auth-update-card");
 var mainApp=document.getElementById("main-app");
 var authErr=document.getElementById("auth-err");
 var authSucc=document.getElementById("auth-success");
@@ -139,13 +150,22 @@ var authForgot=document.getElementById("auth-forgot");
 var authBackResetRow=document.getElementById("auth-back-reset-row");
 var authBackLogin=document.getElementById("auth-back-login");
 var authPassEye=document.getElementById("auth-pass-eye");
+var updPass1=document.getElementById("upd-pass1");
+var updPass2=document.getElementById("upd-pass2");
+var updEye1=document.getElementById("upd-eye1");
+var updEye2=document.getElementById("upd-eye2");
+var updSubmit=document.getElementById("upd-submit");
+var updErr=document.getElementById("upd-err");
+var updSucc=document.getElementById("upd-success");
 var btnLogout=document.getElementById("btn-logout");
 
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 
 function resolveApi(rel){try{rel=String(rel||"").replace(/^\/*/,"");var raw=(window.location.pathname||"/").split("?")[0]||"/";if(raw.slice(-1)==="/")return raw+rel;var leaf=raw.slice(raw.lastIndexOf("/")+1);if(leaf.indexOf(".")!==-1){var d=raw.slice(0,raw.lastIndexOf("/")+1);return(d||"/")+rel}return raw+"/"+rel}catch(err){logErr("[API "+rel+"]",err);return"/"+rel}}
 function authResetPasswordUrl(){var b=resolveApi("api/auth");return b.indexOf("?")>=0?b+"&action=resetPassword":b+"?action=resetPassword"}
+function authUpdatePasswordUrl(){var b=resolveApi("api/auth");return b.indexOf("?")>=0?b+"&action=updatePassword":b+"?action=updatePassword"}
 function resetPasswordViaApi(email){return fetch(authResetPasswordUrl(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email}),credentials:"same-origin"}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})}).then(function(x){if(!x.res.ok){var m=(x.j&&x.j.error)||("HTTP "+x.res.status);if(x.j&&x.j.code)m+=" （code:"+x.j.code+"）";if(typeof x.j.status==="number")m+=" （status:"+x.j.status+"）";throw new Error(m.trim());}if(!x.j||x.j.success!==true)throw new Error((x.j&&x.j.error)||"パスワードリセットメールを送信できませんでした");})}
+function updatePasswordViaApi(accessToken,password){return fetch(authUpdatePasswordUrl(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:password,access_token:accessToken}),credentials:"same-origin"}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})}).then(function(x){if(!x.res.ok){var m=(x.j&&x.j.error)||("HTTP "+x.res.status);if(x.j&&x.j.code)m+=" （code:"+x.j.code+"）";if(typeof x.j.status==="number")m+=" （status:"+x.j.status+"）";throw new Error(m.trim());}if(!x.j||x.j.success!==true)throw new Error((x.j&&x.j.error)||"パスワードを更新できませんでした");})}
 function logErr(scope,err){try{console.error(scope,err&&(err.stack||err.message||err)||err)}catch(e){}}
 window.addEventListener("error",function(ev){try{console.error(ev.message,ev.filename,ev.lineno)}catch(e){}});
 window.addEventListener("unhandledrejection",function(ev){try{console.error("未処理Promise:",ev.reason)}catch(e){}});
@@ -166,13 +186,31 @@ function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();
 function remain(){return remainCount}
 function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の会話回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
 
-function showAuthView(){authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
+function showAuthView(){
+  authScreen.classList.remove("is-hidden");
+  mainApp.classList.remove("is-visible");
+  stopAud();
+  recoveryAccessToken=null;
+  if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}
+  authLoginCard.classList.remove("auth-hide");
+  authUpdateCard.classList.add("auth-hide");
+}
 function showChatView(){authScreen.classList.add("is-hidden");mainApp.classList.add("is-visible")}
 
 function authErrShow(t){authErr.style.display="block";authErr.textContent=t||""}
 function authErrHide(){authErr.style.display="none";authErr.textContent=""}
 function authSuccessShow(t){authSucc.style.display="block";authSucc.textContent=t||""}
 function authSuccessHide(){authSucc.style.display="none";authSucc.textContent=""}
+
+function parseRecoveryAccessToken(){try{var qs=window.location.search||"",h=(window.location.hash||"").replace(/^#/,""),t,re=/access_token=/;if(h&&re.test(h)){t=new URLSearchParams(h).get("access_token");if(t)return t}if(qs&&re.test(qs)){t=new URLSearchParams(qs.charAt(0)==="?"?qs.slice(1):qs).get("access_token");if(t)return t}}catch(e){}return null}
+function stripAuthFromUrl(){try{var u=new URL(window.location.href);u.hash="";var sp=new URLSearchParams(u.search);["access_token","refresh_token","expires_in","token_type","type"].forEach(function(k){sp.delete(k)});var qq=sp.toString();u.search=qq?"?"+qq:"";history.replaceState(null,"",u.pathname+u.search+u.hash)}catch(e){}}
+function updErrShow(t){updErr.style.display="block";updErr.textContent=t||""}
+function updErrHide(){updErr.style.display="none";updErr.textContent=""}
+function updSuccessShow(t){updSucc.style.display="block";updSucc.textContent=t||""}
+function updSuccessHide(){updSucc.style.display="none";updSucc.textContent=""}
+function applyUpdPassVisibility(){if(updPass1){updPass1.type=passVisibleUpd1?"text":"password";if(updEye1){updEye1.setAttribute("aria-pressed",passVisibleUpd1?"true":"false");updEye1.setAttribute("aria-label",passVisibleUpd1?"パスワードを隠す":"パスワードを表示")}}if(updPass2){updPass2.type=passVisibleUpd2?"text":"password";if(updEye2){updEye2.setAttribute("aria-pressed",passVisibleUpd2?"true":"false");updEye2.setAttribute("aria-label",passVisibleUpd2?"パスワードを隠す":"パスワードを表示")}}}
+function enterRecoveryPasswordFlow(tok){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}clearSessionAll();recoveryAccessToken=tok;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
+function submitUpdatePassword(){updErrHide();updSuccessHide();var tok=recoveryAccessToken;if(!tok){updErrShow("セッション情報が見つかりません。メールのリンクをもう一度開いてください。");return}var p1=(updPass1&&updPass1.value)||"",p2=(updPass2&&updPass2.value)||"";if(!p1||!p2){updErrShow("新しいパスワードと確認を入力してください");return}if(p1!==p2){updErrShow("パスワードが一致しません");return}updSubmit.disabled=true;updatePasswordViaApi(tok,p1).then(function(){updSuccessShow("パスワードを更新しました。ログインしてください。");if(updReturnTimer)clearTimeout(updReturnTimer);updReturnTimer=setTimeout(function(){updReturnTimer=null;recoveryAccessToken=null;updSuccessHide();authLoginCard.classList.remove("auth-hide");authUpdateCard.classList.add("auth-hide");syncAuthUi()},3000)}).catch(function(e){updErrShow(e&&e.message?e.message:"更新に失敗しました")}).finally(function(){updSubmit.disabled=false})}
 
 function applyPassVisibility(){authPass.type=passVisible?"text":"password";if(authPassEye){authPassEye.setAttribute("aria-pressed",passVisible?"true":"false");authPassEye.setAttribute("aria-label",passVisible?"パスワードを隠す":"パスワードを表示")}}
 
@@ -235,6 +273,10 @@ fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application
   .finally(function(){authSubmit.disabled=false});
 }
 
+updEye1.addEventListener("click",function(){passVisibleUpd1=!passVisibleUpd1;applyUpdPassVisibility()});
+updEye2.addEventListener("click",function(){passVisibleUpd2=!passVisibleUpd2;applyUpdPassVisibility()});
+updSubmit.addEventListener("click",submitUpdatePassword);
+
 authToggle.addEventListener("click",function(){registerMode=!registerMode;resetMode=false;syncAuthUi();authErrHide();authSuccessHide()});
 authForgot.addEventListener("click",function(){resetMode=true;registerMode=false;syncAuthUi();authErrHide();authSuccessHide()});
 authBackLogin.addEventListener("click",function(){resetMode=false;syncAuthUi();authErrHide();authSuccessHide()});
@@ -291,8 +333,7 @@ function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/
 function stopR(){if(!reco)return;try{reco.stop()}catch(err){}}
 bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if(recOn)stopR();else startR()})}
 
-syncAuthUi();
-tryResumeSession();
+var rtParse=parseRecoveryAccessToken();if(rtParse){enterRecoveryPasswordFlow(rtParse)}else{recoveryAccessToken=null;syncAuthUi();tryResumeSession()}
 ["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});
 })();
 </script>
