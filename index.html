@@ -26,6 +26,8 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .row.ai .bubble{background:var(--white);border-bottom-left-radius:6px}
 .row.user .bubble{background:var(--bubble);border-bottom-right-radius:6px}
 .bubble.err{background:#fff5f5;color:#8a4444;border:1px solid rgba(232,93,93,.25)}
+.bubble strong{font-weight:600;color:inherit}
+.bubble em{font-style:italic}
 .composer-area{position:fixed;bottom:0;left:0;right:0;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(250,248,245,0),var(--bg) 18%);border-top:1px solid rgba(143,163,149,.2)}
 .composer-inner{max-width:560px;margin:0 auto}
 .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -77,19 +79,22 @@ function incUsed(){var t=ymd(),s=readStore();if(s.d!==t)s.n=0;s.d=t;s.n++;writeS
 function remain(){return Math.max(0,LIM-usedToday())}
 function updRally(){var r=remain();rallyEl.textContent="残り "+r+" 回";if(r<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の会話回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
 function scrollBot(){requestAnimationFrame(function(){logEl.scrollTop=logEl.scrollHeight})}
-function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");b.textContent=text;row.appendChild(b);logEl.appendChild(row);scrollBot()}
+function escapeHtml(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function formatAiBubbleHtml(raw){var s=escapeHtml(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"<strong>$1</strong>");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1<em>$2</em>");s=s.replace(/\n/g,"<br>");return s}
+function stripMarkdownForSpeech(raw){var s=String(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"$1");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1$2");return s.replace(/\*+/g," ").replace(/\s+/g," ").trim()}
+function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");if(!err&&role==="ai"){b.innerHTML=formatAiBubbleHtml(text)}else{b.textContent=text}row.appendChild(b);logEl.appendChild(row);scrollBot()}
 function stopAud(){try{if(aud){aud.pause();aud.src=""}}catch(e){}aud=null}
 var ttsPrimed=false;
 function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var ctx=new AC();var resume=ctx.resume&&ctx.resume.bind(ctx);if(resume){resume().catch(function(){})}var osc=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=0;osc.connect(gain);gain.connect(ctx.destination);osc.start(0);osc.stop(ctx.currentTime+0.02)}}catch(e){logErr("[TTS prime]",e)}finally{ttsPrimed=true}}
 
-function speak(t){if(!ttsOn||!t)return;var url=resolveApi("api/tts"),txt=String(t).replace(/\s+/g," ").trim();if(!txt)return;stopAud();fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:txt}),credentials:"same-origin"}).then(function(r){return r.blob().then(function(blob){return{r:r,blob:blob}})}).then(function(x){var hdr=(x.r.headers&&x.r.headers.get&&x.r.headers.get("content-type")||"").toLowerCase(),ct=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;if(!x.r.ok||ct){return x.blob.text().then(function(raw){var j={};try{j=raw?JSON.parse(raw):{}}catch(e){}throw new Error((j&&j.error)||raw||("TTS HTTP "+x.r.status))})}if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");return x.blob}).then(function(blob){var u=URL.createObjectURL(blob),a=new Audio();a.src=u;aud=a;var cleanup=function(){try{URL.revokeObjectURL(u)}catch(e){}a.removeEventListener("ended",cleanup);a.removeEventListener("error",onErr)};var onErr=function(){cleanup();logErr("[TTS 要素エラー]",a.error||"Audio error")};a.addEventListener("ended",cleanup);a.addEventListener("error",onErr);return a.play().then(function(){return null}).catch(function(playErr){cleanup();throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）")})}).catch(function(err){logErr("[TTS] "+url,err)})}
+function speak(t){if(!ttsOn||!t)return;var url=resolveApi("api/tts"),txt=stripMarkdownForSpeech(t);if(!txt)return;stopAud();fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:txt}),credentials:"same-origin"}).then(function(r){return r.blob().then(function(blob){return{r:r,blob:blob}})}).then(function(x){var hdr=(x.r.headers&&x.r.headers.get&&x.r.headers.get("content-type")||"").toLowerCase(),ct=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;if(!x.r.ok||ct){return x.blob.text().then(function(raw){var j={};try{j=raw?JSON.parse(raw):{}}catch(e){}throw new Error((j&&j.error)||raw||("TTS HTTP "+x.r.status))})}if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");return x.blob}).then(function(blob){var u=URL.createObjectURL(blob),a=new Audio();a.src=u;aud=a;var cleanup=function(){try{URL.revokeObjectURL(u)}catch(e){}a.removeEventListener("ended",cleanup);a.removeEventListener("error",onErr)};var onErr=function(){cleanup();logErr("[TTS 要素エラー]",a.error||"Audio error")};a.addEventListener("ended",cleanup);a.addEventListener("error",onErr);return a.play().then(function(){return null}).catch(function(playErr){cleanup();throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）")})}).catch(function(err){logErr("[TTS] "+url,err)})}
 
 function bootstrapGreet(){
   var g="こんにちは😊 今日も一日お疲れ様でした。\n今日はどんな1日でしたか？";
   var opener="今日のことを少し振り返りたいです。よろしくお願いします。";
   apiMsgs=[{role:"user",content:opener},{role:"assistant",content:g}];
   addBubble("ai",g);
-  speak(g.replace(/\n/g," "));
+  speak(stripMarkdownForSpeech(g.replace(/\n/g," ")));
 }
 
 function send(){
