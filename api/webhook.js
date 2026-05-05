@@ -4,7 +4,7 @@
  * 必要な環境変数:
  * - STRIPE_WEBHOOK_SECRET (whsec_…)
  * - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY （RLS をバイパスして DB 更新）
- * - STRIPE_SECRET_KEY （サブスク metadata フォールバック／insert 時の Customer email 取得に使用）
+ * - STRIPE_SECRET_KEY （セッションに metadata が無いときサブスク metadata を取得するフォールバック）
  *
  * public.users が無い場合の例（Supabase SQL）:
  *
@@ -117,32 +117,11 @@ async function handleCheckoutSessionCompleted(session) {
   }
 
   if (!data?.length) {
-    if (!stripe) {
-      console.error(
-        "[webhook] users insert をスキップ: STRIPE_SECRET_KEY がなく customer を取得できません。"
-      );
-      return;
-    }
-    const customerRef = session.customer;
-    const customerId =
-      typeof customerRef === "string" ? customerRef : customerRef?.id;
-    if (!customerId) {
-      console.error(
-        "[webhook] users insert をスキップ: session.customer がありません。"
-      );
-      return;
-    }
-
-    const customer = await stripe.customers.retrieve(customerId);
-    const email =
-      customer && !customer.deleted && "email" in customer
-        ? customer.email ?? null
-        : null;
+    const email = session.customer_details?.email;
 
     if (!email) {
       console.error(
-        "[webhook] users insert をスキップ: customer.email が取得できません。",
-        customerId
+        "[webhook] users insert をスキップ: session.customer_details.email がありません。"
       );
       return;
     }
