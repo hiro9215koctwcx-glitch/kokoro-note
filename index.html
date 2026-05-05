@@ -183,6 +183,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <button type="button" class="btn-icon auth-hide" id="btn-tts-stop" aria-label="読み上げを停止">⏹ 停止</button>
 <button type="button" class="btn-icon mic" id="btn-mic" aria-label="音声入力">🎤</button>
 </div>
+<p id="mic-usage-hint" class="mic-usage-hint" role="note">🎤 マイクボタンを押す → 話す → もう一度押して終了 → 送信ボタンで送る</p>
 <div id="voice-hints" class="voice-hints-note" role="note" aria-label="音声機能の説明">
 <p>🎤 音声入力：話し終わったら自動で認識します（数秒かかる場合があります）</p>
 <p>🔊 音声返答：高品質な音声生成のため、返答まで数秒かかります</p>
@@ -192,7 +193,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <label class="sr-only" for="message-input">メッセージ入力</label>
 <textarea id="message-input" rows="5" placeholder="気持ちを書いてみましょう" autocomplete="off"></textarea>
 <button type="button" class="btn-send" id="btn-send">送信</button>
-</div><p id="mic-usage-hint" class="mic-usage-hint" role="note">🎤 マイクボタンを押す → 話す → もう一度押して終了 → 送信ボタンで送る</p><p class="hint" id="composer-hint">Enter で改行 · Enter を続けて2回で送信</p></div></div>
+</div><p class="hint" id="composer-hint">Enter で改行 · Enter を続けて2回で送信</p></div></div>
 </div>
 
 <script>
@@ -212,7 +213,7 @@ var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
 var typewriterBusy=false;var typewriterState=null;
 var suppressMrTranscript=false,whisperSending=false,mrStream=null,mrRecorder=null,mrChunks=[],mrMime="",micFallbackInput=null;
 var VOICE_HINTS_LS_KEY="kokoro_voice_hints_seen",voiceHintsPersistRegistered=false;
-var MIC_USAGE_HINT_LS_KEY="kokoro_mic_usage_hint_show_count";
+var MIC_USAGE_HINT_LS_KEY="kokoro_mic_usage_hint_v2";
 
 var authScreen=document.getElementById("auth-screen");
 var authLoginCard=document.getElementById("auth-login-card");
@@ -538,6 +539,88 @@ function kokoroTtsBlobUrlFromBase64(b64){
     return URL.createObjectURL(outBlob);
   }catch(err){throw new Error("音声データの変換に失敗しました")}
 }
+function arrayBufferToBase64(buf){
+  if(!buf)return"";
+  var bytes=new Uint8Array(buf);
+  var len=bytes.byteLength;
+  if(!len)return"";
+  var binary="";
+  var chunk=8192;
+  var i;
+  for(i=0;i<len;i+=chunk){
+    binary+=String.fromCharCode.apply(null,bytes.subarray(i,Math.min(len,i+chunk)));
+  }
+  return btoa(binary);
+}
+function playIosAssistantTTS(t,iosUi){
+  if(!iosUi)return;
+  if(!ttsOn){restoreIosTtsPlayIdle(iosUi);return}
+  var plain=stripMarkdownForSpeech(t||"");
+  if(!plain){console.error("iOS TTS テキストが空です");restoreIosTtsPlayIdle(iosUi);return}
+  var url=resolveApi("api/tts");
+  stopAud();
+  fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:plain}),credentials:"same-origin"})
+    .then(function(r){
+      var hdr=(r.headers&&r.headers.get&&r.headers.get("content-type")||"").toLowerCase();
+      var jsonish=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;
+      if(!r.ok||jsonish){
+        return r.text().then(function(raw){
+          var j={};
+          try{j=raw?JSON.parse(raw):{}}catch(e){}
+          throw new Error((j&&j.error)||raw||("TTS HTTP "+r.status));
+        });
+      }
+      return r.arrayBuffer();
+    })
+    .then(function(buf){
+      if(!buf||!buf.byteLength)throw new Error("音声データが空です");
+      var b64=arrayBufferToBase64(buf);
+      var blobUrl=kokoroTtsBlobUrlFromBase64(b64);
+      var audio=new Audio(blobUrl);
+      audio._kokoroTtsBlobUrl=blobUrl;
+      aud=audio;
+      try{iosUi.playBtn.classList.add("auth-hide")}catch(eP){}
+      try{iosUi.stopBtn.classList.remove("auth-hide")}catch(eSt){}
+      audio.onended=function(){
+        revokeKokoroTtsBlobUrl(audio);
+        try{audio.onended=null}catch(eN){}
+        aud=null;
+        try{iosUi.abortPlayback=null}catch(eAb){}
+        try{iosUi.stopBtn.classList.add("auth-hide")}catch(eH){}
+        try{hideIosTtsOfferAfterDone(iosUi)}catch(eHd){}
+      };
+      audio.addEventListener("error",function iosTtsErr(){
+        audio.removeEventListener("error",iosTtsErr);
+        revokeKokoroTtsBlobUrl(audio);
+        aud=null;
+        try{audio.onended=null}catch(eNe){}
+        try{iosUi.abortPlayback=null}catch(eAb2){}
+        console.error("iOS再生エラー",audio.error||"Audio error");
+        restoreIosTtsPlayIdle(iosUi);
+      });
+      iosUi.abortPlayback=function(){
+        try{audio.onended=null}catch(eOe){}
+        try{audio.pause();try{audio.currentTime=0}catch(eCt){};audio.src=""}catch(ePz){}
+        revokeKokoroTtsBlobUrl(audio);
+        aud=null;
+        iosUi.abortPlayback=null;
+        try{iosUi.stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)}catch(eR){}
+      };
+      return audio.play().catch(function(playErr){
+        try{audio.onended=null}catch(eOe2){}
+        console.error("iOS再生エラー",playErr);
+        revokeKokoroTtsBlobUrl(audio);
+        aud=null;
+        try{iosUi.abortPlayback=null}catch(eAb3){}
+        restoreIosTtsPlayIdle(iosUi);
+      });
+    })
+    .catch(function(err){
+      console.error("iOS TTS",err);
+      try{iosUi.abortPlayback=null}catch(y){}
+      restoreIosTtsPlayIdle(iosUi);
+    });
+}
 function stopAud(){hidePcTtsStopBtn();try{if(aud){revokeKokoroTtsBlobUrl(aud);aud.pause();try{aud.currentTime=0}catch(e){};aud.src=""}}catch(e){}aud=null}
 var ttsPrimed=false;
 function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var ctx=new AC();var resume=ctx.resume&&ctx.resume.bind(ctx);if(resume){resume().catch(function(){})}var osc=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=0;osc.connect(gain);gain.connect(ctx.destination);osc.start(0);osc.stop(ctx.currentTime+0.02)}}catch(e){logErr("[TTS prime]",e)}finally{ttsPrimed=true}}
@@ -576,7 +659,7 @@ function attachIosTtsListenButton(aiMsgRow,text){
   wrap.appendChild(inner);
   aiMsgRow.after(wrap);
   var iosUi={playBtn:playBtn,stopBtn:stopBtn,wrap:wrap,defaultPlayLabel:defaultPlayLabel,abortPlayback:null};
-  playBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(playBtn.disabled)return;primeAudioPlayback();playBtn.disabled=true;playBtn.textContent="音声を準備中...";playAssistantTTS(text,iosUi)},false);
+  playBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(playBtn.disabled)return;primeAudioPlayback();playBtn.disabled=true;playBtn.textContent="音声を準備中...";requestAnimationFrame(function(){requestAnimationFrame(function(){playIosAssistantTTS(text,iosUi)})})},false);
   stopBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(typeof iosUi.abortPlayback==="function"){try{iosUi.abortPlayback()}catch(eAb){}iosUi.abortPlayback=null}try{if(aud){revokeKokoroTtsBlobUrl(aud);aud.pause();try{aud.currentTime=0}catch(eT){};aud.src=""}}catch(eA){}aud=null;stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)},false);
 }
 function refreshIosTtsOffersFromHistory(){if(!isIOS)return;removeIosTtsOfferRows();if(!ttsOn)return;var px=peekLastAssistantText();var tgt=resolveLastAiBubbleRow();if(px&&tgt)attachIosTtsListenButton(tgt,px)}
