@@ -239,9 +239,11 @@ async function handler(req, res) {
   const system = buildBaseSystemPrompt(summary);
 
   let remainingBefore;
+  let rallyLimit = RALLY_DAILY_LIMIT;
   try {
     const r = await getDailyRemaining(sb, user.id);
     remainingBefore = r.remaining;
+    if (typeof r.limit === "number") rallyLimit = r.limit;
   } catch (err) {
     console.error("[chat] getDailyRemaining:", err);
     remainingBefore = RALLY_DAILY_LIMIT;
@@ -249,9 +251,9 @@ async function handler(req, res) {
 
   if (!isInit && remainingBefore <= 0) {
     return json(res, 429, {
-      error: "本日の会話回数に達しました。",
+      error: "本日の上限回数に達しました。",
       remaining: 0,
-      limit: RALLY_DAILY_LIMIT,
+      limit: rallyLimit,
     });
   }
 
@@ -295,10 +297,12 @@ async function handler(req, res) {
     }
 
     let remainingAfter = remainingBefore;
+    let responseLimit = rallyLimit;
     if (!isInit) {
       try {
-        const inc = await incrementDailyRally(sb, user.id);
+        const inc = await incrementDailyRally(sb, user.id, rallyLimit);
         remainingAfter = inc.remaining;
+        if (typeof inc.limit === "number") responseLimit = inc.limit;
       } catch (err) {
         console.error("[chat] incrementDailyRally:", err);
       }
@@ -307,7 +311,7 @@ async function handler(req, res) {
     return json(res, 200, {
       message,
       remaining: remainingAfter,
-      limit: RALLY_DAILY_LIMIT,
+      limit: responseLimit,
       saveOk,
     });
   } catch (err) {

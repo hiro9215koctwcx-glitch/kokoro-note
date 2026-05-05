@@ -277,7 +277,7 @@ function stripeCheckoutRedirect(planKey,opt){
 }
 
 function remain(){return remainCount}
-function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の会話回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
+function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の上限回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
 
 function showAuthView(){
   closePlanChoiceModal();
@@ -339,6 +339,7 @@ function initFromServer(){
       renderAllBubbles();
       persistSnapshot();
       if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+      if(typeof x.j.limit==="number")LIM=x.j.limit;
       if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));
       speak(msg);
     })
@@ -407,8 +408,8 @@ function send(){
   apiMsgs.push({role:"user",content:t});
   fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({messages:apiMsgs})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-    .then(function(x){if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));speak(msg)})
-    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の会話回数に達しました";addBubble("ai",m,true);if(e&&e._status===429)updRallyRemain(0)})
+    .then(function(x){if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));speak(msg)})
+    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",m,true);if(e&&e._status===429)updRallyRemain(0)})
     .finally(function(){sending=false;updRallyRemain(remainCount)});
 }
 

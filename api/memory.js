@@ -27,12 +27,19 @@
  * alter table public.daily_usage enable row level security;
  * create policy daily_usage_is_owner on public.daily_usage
  *   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+ *
+ * public.users(plan) を参照して日次ラリー上限を決めます。
+ * authenticated が自分の行の plan を読めるように、例えば以下のポリシーを追加してください。
+ *
+ * alter table public.users enable row level security;
+ * create policy users_select_own on public.users for select using (auth.uid() = id);
  */
 
 import { createClient } from "@supabase/supabase-js";
 
 const TZ = "Asia/Tokyo";
-const DAILY_LIMIT = 5;
+/** trial / null / 不明時の既定（クエリ失敗時のフォールバックにも利用） */
+const TRIAL_OR_UNKNOWN_DAILY_LIMIT = 5;
 
 export function jstDateParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -84,6 +91,32 @@ export function createUserSupabase(accessToken) {
   });
 }
 
+export function dailyLimitFromPlan(planRaw) {
+  if (planRaw === null || planRaw === undefined) {
+    return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
+  }
+  const p = String(planRaw).trim().toLowerCase();
+  if (!p || p === "trial") return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
+  if (p === "light") return 10;
+  if (p === "standard") return 30;
+  return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
+}
+
+export async function resolveDailyRallyLimit(sb, userId) {
+  const { data, error } = await sb
+    .from("users")
+    .select("plan")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[memory] resolveDailyRallyLimit:", error.message);
+    return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
+  }
+
+  return dailyLimitFromPlan(data?.plan ?? null);
+}
+
 /** JST で「昨日」の 00:00 〜 7日前までのメッセージ（要約用） */
 export async function fetchPastDaysForSummary(sb, userId, maxChars = 8000) {
   const todayStartIso = startOfTodayJstIso();
@@ -129,6 +162,7 @@ export async function insertConversationRows(sb, userId, rows) {
 }
 
 export async function getDailyRemaining(sb, userId) {
+  const limit = await resolveDailyRallyLimit(sb, userId);
   const { ymd } = jstDateParts();
   const { data, error } = await sb
     .from("daily_usage")
@@ -143,11 +177,15 @@ export async function getDailyRemaining(sb, userId) {
   }
 
   const used = typeof data?.rally_count === "number" ? data.rally_count : 0;
-  return { remaining: Math.max(0, DAILY_LIMIT - used), used, dateKey: ymd };
+  return { remaining: Math.max(0, limit - used), used, dateKey: ymd, limit };
 }
 
-/** カウントを1増やし、その後の remaining を返す */
-export async function incrementDailyRally(sb, userId) {
+/** カウントを1増やし、その後の remaining を返す。limit は省略時に users.plan を再取得します。 */
+export async function incrementDailyRally(sb, userId, preResolvedLimit) {
+  const limit =
+    typeof preResolvedLimit === "number"
+      ? preResolvedLimit
+      : await resolveDailyRallyLimit(sb, userId);
   const { ymd } = jstDateParts();
   const { data: row, error: selErr } = await sb
     .from("daily_usage")
@@ -176,10 +214,11 @@ export async function incrementDailyRally(sb, userId) {
     throw new Error(upErr.message || "利用回数の更新に失敗しました");
   }
 
-  return { remaining: Math.max(0, DAILY_LIMIT - next), used: next, dateKey: ymd };
+  return { remaining: Math.max(0, limit - next), used: next, dateKey: ymd, limit };
 }
 
-export const RALLY_DAILY_LIMIT = DAILY_LIMIT;
+/** 旧コード互換・エラー時フォールバック用（trial 相当） */
+export const RALLY_DAILY_LIMIT = TRIAL_OR_UNKNOWN_DAILY_LIMIT;
 
 async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
