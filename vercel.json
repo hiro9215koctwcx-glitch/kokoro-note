@@ -15,6 +15,10 @@
       "dest": "/api/checkout.js"
     },
     {
+      "src": "/api/portal",
+      "dest": "/api/portal.js"
+    },
+    {
       "src": "/api/chat",
       "dest": "/api/chat.js"
     },
