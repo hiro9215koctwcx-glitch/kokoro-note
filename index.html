@@ -50,6 +50,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .header-actions{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
 .btn-logout{padding:8px 14px;border-radius:999px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer;box-shadow:0 2px 8px var(--sh)}
 .btn-logout:active{transform:scale(.98)}
+.trial-ended-screen{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom));min-height:100dvh;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.trial-ended-card{width:100%;max-width:400px;background:var(--white);padding:28px 24px;border-radius:22px;box-shadow:0 12px 40px var(--sh)}
+.trial-ended-title{font-size:1.2rem;font-weight:600;text-align:center;margin:0 0 14px;color:var(--green-deep);letter-spacing:.03em}
+.trial-ended-msg{font-size:.875rem;color:var(--text);line-height:1.65;text-align:center;margin:0 0 26px}
+.trial-ended-actions{display:flex;flex-direction:column;gap:10px;margin-top:4px}
 .auth-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom));min-height:100dvh}
 .auth-card{width:100%;max-width:400px;background:var(--white);padding:28px 24px;border-radius:22px;box-shadow:0 12px 40px var(--sh)}
 .auth-title{font-size:1.25rem;font-weight:600;text-align:center;margin:0 0 6px;letter-spacing:.04em}
@@ -122,6 +127,16 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     <div class="auth-field"><label for="upd-pass1">新しいパスワード</label><div class="auth-pass-wrap"><input id="upd-pass1" class="auth-pass-field" type="text" autocomplete="new-password" /><button type="button" class="auth-pass-eye" id="upd-eye1" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
     <div class="auth-field"><label for="upd-pass2">パスワード確認</label><div class="auth-pass-wrap"><input id="upd-pass2" class="auth-pass-field" type="text" autocomplete="new-password" /><button type="button" class="auth-pass-eye" id="upd-eye2" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
     <div class="auth-actions"><button type="button" class="btn-auth-primary" id="upd-submit">パスワードを更新する</button></div>
+  </div>
+</div>
+
+<div id="trial-ended-screen" class="trial-ended-screen auth-hide" aria-hidden="true" role="alertdialog" aria-labelledby="trial-ended-heading" aria-modal="true">
+  <div class="trial-ended-card">
+    <p class="trial-ended-title" id="trial-ended-heading">トライアル期間が終了しました</p>
+    <p class="trial-ended-msg">7日間のトライアルをご利用いただきありがとうございました。引き続きご利用いただくには、有料プランへのお申し込みが必要です。</p>
+    <div class="trial-ended-actions">
+      <button type="button" class="btn-auth-primary" id="btn-trial-pick-plan">プランを選ぶ</button>
+    </div>
   </div>
 </div>
 
@@ -219,6 +234,9 @@ function userId(){try{var s=sessionStorage.getItem(SESS_KEY);if(!s)return null;v
 function setSession(data){sessionStorage.setItem(SESS_KEY,JSON.stringify(data))}
 function patchSession(partial){try{var raw=sessionStorage.getItem(SESS_KEY);if(!raw||!partial||typeof partial!=="object")return;var o=JSON.parse(raw);var k;for(k in partial){if(Object.prototype.hasOwnProperty.call(partial,k))o[k]=partial[k]}sessionStorage.setItem(SESS_KEY,JSON.stringify(o))}catch(z){console.error("[patchSession]",z)}}
 function clearSessionAll(){try{sessionStorage.removeItem(SESS_KEY);sessionStorage.removeItem(MSG_SNAP)}catch(e){}}
+function readSessionTrialExpired(){try{var s=sessionStorage.getItem(SESS_KEY);if(!s)return false;var o=JSON.parse(s);return o.trialExpired===true}catch(e){return false}}
+function hideTrialEndedScreen(){var te=document.getElementById("trial-ended-screen");if(te){te.classList.add("auth-hide");te.setAttribute("aria-hidden","true")}}
+function showTrialEndedScreen(){closePlanChoiceModal();var te=document.getElementById("trial-ended-screen");if(te){te.classList.remove("auth-hide");te.setAttribute("aria-hidden","false")}authScreen.classList.add("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
 
 function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
 
@@ -229,12 +247,34 @@ function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)ret
 function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();if(t)h.Authorization="Bearer "+t;return h}
 
 var stripeCheckoutBusy=false;
+var trialFlowBusy=false;
 var selectedPlanKey=null;
 
 function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("auth-hide");planModal.setAttribute("aria-hidden","true");selectedPlanKey=null;if(planConfirmBtn)planConfirmBtn.disabled=true;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){c.classList.remove("is-selected");c.setAttribute("aria-pressed","false")})}if(planModalErr){planModalErr.textContent="";planModalErr.classList.remove("is-visible")}}
 function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t||"";planModalErr.classList.toggle("is-visible",!!t)}
 function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}}
-function startFreeTrialAndChat(){closePlanChoiceModal();patchSession({billingPlan:null});showChatView();logEl.innerHTML="";apiMsgs=[];initFromServer()}
+function startFreeTrialAndChat(){
+  if(!getTok()){planModalStripeErr("ログインが必要です");return}
+  if(trialFlowBusy)return;
+  trialFlowBusy=true;
+  planModalStripeErr("");
+  fetch(resolveApi("api/auth"),{method:"POST",headers:Object.assign({},chatHeaders(),{"Content-Type":"application/json"}),body:JSON.stringify({action:"startTrial"}),credentials:"same-origin"})
+    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+    .then(function(x){
+      if(!x.res.ok)throw new Error((x.j&&x.j.error)||"トライアル開始に失敗しました");
+      if(typeof x.j.limit==="number")LIM=x.j.limit;
+      if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+      patchSession({billingPlan:x.j.plan!==undefined&&x.j.plan!==null?x.j.plan:null,trialExpired:!!x.j.trial_expired});
+      closePlanChoiceModal();
+      if(x.j.trial_expired===true){showTrialEndedScreen();return}
+      showChatView();
+      logEl.innerHTML="";
+      apiMsgs=[];
+      initFromServer();
+    })
+    .catch(function(e){logErr("[startTrial]",e);planModalStripeErr(e&&e.message?e.message:"トライアル開始に失敗しました")})
+    .finally(function(){trialFlowBusy=false});
+}
 
 function needsPlanChoiceModal(planToken){
   var p=null;
@@ -247,6 +287,7 @@ function needsPlanChoiceModal(planToken){
 }
 
 function enterChatSkippingPlanChoice(){
+  if(readSessionTrialExpired()){showTrialEndedScreen();return}
   closePlanChoiceModal();
   showChatView();
   logEl.innerHTML="";
@@ -267,7 +308,8 @@ function bootstrapReturningUserPlanGate(lpPrefill){
       }
       if(typeof x.j.limit==="number")LIM=x.j.limit;
       if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
-      patchSession({billingPlan:x.j.plan!=null&&x.j.plan!==undefined?x.j.plan:null});
+      patchSession({billingPlan:x.j.plan!=null&&x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
+      if(x.j.trial_expired===true){showTrialEndedScreen();return}
       if(!needsPlanChoiceModal(x.j.plan)){
         enterChatSkippingPlanChoice();
         return;
@@ -345,6 +387,7 @@ function remain(){return remainCount}
 function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の上限回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
 
 function showAuthView(){
+  hideTrialEndedScreen();
   closePlanChoiceModal();
   authScreen.classList.remove("is-hidden");
   mainApp.classList.remove("is-visible");
@@ -357,7 +400,13 @@ function showAuthView(){
   authUpdateCard.classList.add("auth-hide");
 }
 function syncPlanPortalButtonVisibility(){var btn=document.getElementById("btn-plan-portal");if(!btn)return;var show=false;try{var raw=sessionStorage.getItem(SESS_KEY);if(raw){var oo=JSON.parse(raw);var bp=oo.billingPlan;if(bp!==undefined&&bp!==null){var tt=String(bp).trim().toLowerCase();if(tt)show=(tt==="light"||tt==="standard")}}}catch(ge){console.error("[syncPlanPortalButtonVisibility]",ge)}btn.classList.toggle("auth-hide",!show)}
-function showChatView(){authScreen.classList.add("is-hidden");mainApp.classList.add("is-visible");syncPlanPortalButtonVisibility()}
+function showChatView(){
+  if(readSessionTrialExpired()){showTrialEndedScreen();return}
+  hideTrialEndedScreen();
+  authScreen.classList.add("is-hidden");
+  mainApp.classList.add("is-visible");
+  syncPlanPortalButtonVisibility();
+}
 
 function authErrShow(t){authErr.style.display="block";authErr.textContent=t||""}
 function authErrHide(){authErr.style.display="none";authErr.textContent=""}
@@ -371,7 +420,7 @@ function updErrHide(){updErr.style.display="none";updErr.textContent=""}
 function updSuccessShow(t){updSucc.style.display="block";updSucc.textContent=t||""}
 function updSuccessHide(){updSucc.style.display="none";updSucc.textContent=""}
 function applyUpdPassVisibility(){if(updPass1){updPass1.type=passVisibleUpd1?"text":"password";if(updEye1){updEye1.setAttribute("aria-pressed",passVisibleUpd1?"true":"false");updEye1.setAttribute("aria-label",passVisibleUpd1?"パスワードを隠す":"パスワードを表示")}}if(updPass2){updPass2.type=passVisibleUpd2?"text":"password";if(updEye2){updEye2.setAttribute("aria-pressed",passVisibleUpd2?"true":"false");updEye2.setAttribute("aria-label",passVisibleUpd2?"パスワードを隠す":"パスワードを表示")}}}
-function enterRecoveryPasswordFlow(rec){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}clearSessionAll();recoveryAccessToken=(rec&&rec.access_token)||null;recoveryRefreshToken=(rec&&rec.refresh_token)||null;recoveryCode=(rec&&rec.code)||null;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
+function enterRecoveryPasswordFlow(rec){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}clearSessionAll();hideTrialEndedScreen();recoveryAccessToken=(rec&&rec.access_token)||null;recoveryRefreshToken=(rec&&rec.refresh_token)||null;recoveryCode=(rec&&rec.code)||null;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
 function submitUpdatePassword(){updErrHide();updSuccessHide();var tok=recoveryAccessToken,rt=recoveryRefreshToken,co=recoveryCode;if(!(tok||co)){updErrShow("セッション情報が見つかりません。メールのリンクをもう一度開いてください。");return}if(tok&&!rt&&!co){console.warn("[kokoro recovery] refresh_token が未取得です（ハッシュまたはクエリに含まれているか確認してください）")}var p1=(updPass1&&updPass1.value)||"",p2=(updPass2&&updPass2.value)||"";if(!p1||!p2){updErrShow("新しいパスワードと確認を入力してください");return}if(p1!==p2){updErrShow("パスワードが一致しません");return}var bod={password:p1};if(tok)bod.access_token=tok;if(rt)bod.refresh_token=rt;if(co)bod.code=co;console.log("[kokoro recovery] POST body keys:",Object.keys(bod));updSubmit.disabled=true;updatePasswordViaApi(bod).then(function(){updSuccessShow("パスワードを更新しました。ログインしてください。");if(updReturnTimer)clearTimeout(updReturnTimer);updReturnTimer=setTimeout(function(){updReturnTimer=null;recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;updSuccessHide();authLoginCard.classList.remove("auth-hide");authUpdateCard.classList.add("auth-hide");syncAuthUi()},3000)}).catch(function(e){updErrShow(e&&e.message?e.message:"更新に失敗しました")}).finally(function(){updSubmit.disabled=false})}
 
 function applyPassVisibility(){authPass.type=passVisible?"text":"password";if(authPassEye){authPassEye.setAttribute("aria-pressed",passVisible?"true":"false");authPassEye.setAttribute("aria-label",passVisible?"パスワードを隠す":"パスワードを表示")}}
@@ -399,7 +448,15 @@ function initFromServer(){
   var opener={role:"user",content:"今日の振り返りを始めたいです。よろしくお願いします。"};
   fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({init:true,messages:[opener]})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-    .then(function(x){if(!x.res.ok){throw new Error(String((x.j&&x.j.error)||"[chat-init] "+x.res.status));}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
+    .then(function(x){
+      if(x.res.status===403&&x.j&&x.j.trial_expired===true){
+        patchSession({trialExpired:true});
+        if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
+        showTrialEndedScreen();
+        return;
+      }
+      if(!x.res.ok){throw new Error(String((x.j&&x.j.error)||"[chat-init] "+x.res.status));}
+      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
       apiMsgs=[opener,{role:"assistant",content:msg}];
       logEl.innerHTML="";
       renderAllBubbles();
@@ -430,11 +487,12 @@ function submitAuth(){
       .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(eParse){console.error("[kokoro auth] レスポンスJSON解析エラー",eParse)}return {res:res,j:j};})})
       .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||"認証に失敗しました");}if(x.j.needEmailConfirm){authErrShow(x.j.message||"確認メールをご確認ください");return}if(!x.j.access_token)throw new Error("トークンを取得できませんでした");
         sessionStorage.removeItem(MSG_SNAP);
-        var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user,billingPlan:x.j.plan!==undefined?x.j.plan:null};
+        var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user,billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired};
         setSession(sess);
         if(typeof x.j.limit==="number")LIM=x.j.limit;
         if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
         authPass.value="";
+        if(x.j.trial_expired===true){closePlanChoiceModal();showTrialEndedScreen();return}
         if(needsPlanChoiceModal(x.j.plan)){
           openPlanChoiceModal(parsePlanQuery());
         }else{
@@ -466,13 +524,16 @@ btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl
 planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
 planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
 planFreeTrialBtn.addEventListener("click",function(){planModalStripeErr("");startFreeTrialAndChat()});
+var btnTrialPickPlan=document.getElementById("btn-trial-pick-plan");
+if(btnTrialPickPlan)btnTrialPickPlan.addEventListener("click",function(){openPlanChoiceModal(parsePlanQuery())});
 
 function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
   .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-    .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
+  .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
     if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
-    patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null});
+    patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
+    if(x.j.trial_expired===true){showTrialEndedScreen();return}
     showChatView();
     if(loadSnapshot()){try{inp.focus()}catch(z){};return}
     logEl.innerHTML="";apiMsgs=[];
@@ -494,7 +555,19 @@ function send(){
   apiMsgs.push({role:"user",content:t});
   fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({messages:apiMsgs})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-    .then(function(x){if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));speak(msg)})
+    .then(function(x){
+      if(x.res.status===403&&x.j&&x.j.trial_expired===true){
+        patchSession({trialExpired:true});
+        if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
+        apiMsgs.pop();
+        var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();
+        inp.value=t;
+        showTrialEndedScreen();
+        return;
+      }
+      if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}
+      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));speak(msg);
+    })
     .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",m,true);if(e&&e._status===429)updRallyRemain(0)})
     .finally(function(){sending=false;updRallyRemain(remainCount)});
 }

@@ -4,13 +4,14 @@
  *   { "action":"signUp"|"signIn", "email", "password" }
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
- * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining
+ * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired
  */
 
 import { createClient } from "@supabase/supabase-js";
 import {
   createUserSupabase,
   getDailyRemaining,
+  jstDateParts,
   RALLY_DAILY_LIMIT,
 } from "./memory.js";
 
@@ -88,11 +89,13 @@ async function handler(req, res) {
       let remaining = RALLY_DAILY_LIMIT;
       let rallyLimit = RALLY_DAILY_LIMIT;
       let plan = null;
+      let trial_expired = false;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
         if (typeof r.limit === "number") rallyLimit = r.limit;
         plan = r.plan ?? null;
+        trial_expired = Boolean(r.trial_expired);
       } catch (err) {
         console.error("[auth GET] remaining:", err);
       }
@@ -104,6 +107,7 @@ async function handler(req, res) {
           remaining,
           limit: rallyLimit,
           plan,
+          trial_expired,
         })
       );
     } catch (err) {
@@ -293,6 +297,145 @@ async function handler(req, res) {
     }
   }
 
+  if (body.action === "startTrial") {
+    const token = getBearer(req);
+    if (!token) {
+      res.statusCode = 401;
+      return res.end(JSON.stringify({ error: "認証が必要です。" }));
+    }
+    try {
+      const sbUser = createUserSupabase(token);
+      const {
+        data: { user },
+        error: ue,
+      } = await sbUser.auth.getUser();
+      if (ue || !user) {
+        res.statusCode = 401;
+        return res.end(
+          JSON.stringify({ error: ue?.message || "セッションが無効です。" })
+        );
+      }
+
+      const { ymd: todayYmd } = jstDateParts();
+
+      const { data: row, error: rowErr } = await sbUser
+        .from("users")
+        .select("plan, trial_start_date")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (rowErr) {
+        console.error("[auth startTrial] select:", rowErr);
+        res.statusCode = 502;
+        return res.end(
+          JSON.stringify({ error: "ユーザー情報の取得に失敗しました。" })
+        );
+      }
+
+      const pNorm =
+        row?.plan == null || row.plan === ""
+          ? null
+          : String(row.plan).trim().toLowerCase() || null;
+
+      if (pNorm === "light" || pNorm === "standard") {
+        let remaining = RALLY_DAILY_LIMIT;
+        let rallyLimit = RALLY_DAILY_LIMIT;
+        let plan = pNorm;
+        let trial_expired = false;
+        try {
+          const r = await getDailyRemaining(sbUser, user.id);
+          remaining = r.remaining;
+          if (typeof r.limit === "number") rallyLimit = r.limit;
+          plan = r.plan ?? plan;
+          trial_expired = Boolean(r.trial_expired);
+        } catch (e) {
+          console.error("[auth startTrial] quota:", e);
+        }
+        res.statusCode = 200;
+        return res.end(
+          JSON.stringify({
+            success: true,
+            skipped: true,
+            remaining,
+            limit: rallyLimit,
+            plan,
+            trial_expired,
+          })
+        );
+      }
+
+      const emailSafe = typeof user.email === "string" ? user.email.trim() : "";
+
+      if (!row) {
+        const { error: insErr } = await sbUser.from("users").insert({
+          id: user.id,
+          email: emailSafe || "",
+          plan: "trial",
+          trial_start_date: todayYmd,
+        });
+        if (insErr) {
+          console.error("[auth startTrial] insert:", insErr);
+          res.statusCode = 502;
+          return res.end(
+            JSON.stringify({
+              error:
+                insErr.message || "トライアル開始情報を保存できませんでした。",
+            })
+          );
+        }
+      } else {
+        const upd = {};
+        if (!row.trial_start_date) upd.trial_start_date = todayYmd;
+        if (!pNorm) upd.plan = "trial";
+        if (Object.keys(upd).length) {
+          const { error: upErr } = await sbUser
+            .from("users")
+            .update(upd)
+            .eq("id", user.id);
+          if (upErr) {
+            console.error("[auth startTrial] update:", upErr);
+            res.statusCode = 502;
+            return res.end(
+              JSON.stringify({
+                error:
+                  upErr.message || "トライアル開始情報を更新できませんでした。",
+              })
+            );
+          }
+        }
+      }
+
+      let remaining = RALLY_DAILY_LIMIT;
+      let rallyLimit = RALLY_DAILY_LIMIT;
+      let plan = null;
+      let trial_expired = false;
+      try {
+        const r = await getDailyRemaining(sbUser, user.id);
+        remaining = r.remaining;
+        if (typeof r.limit === "number") rallyLimit = r.limit;
+        plan = r.plan ?? null;
+        trial_expired = Boolean(r.trial_expired);
+      } catch (e) {
+        console.error("[auth startTrial] remaining:", e);
+      }
+
+      res.statusCode = 200;
+      return res.end(
+        JSON.stringify({
+          success: true,
+          remaining,
+          limit: rallyLimit,
+          plan,
+          trial_expired,
+        })
+      );
+    } catch (err) {
+      console.error("[auth startTrial]", err);
+      res.statusCode = 502;
+      return res.end(JSON.stringify({ error: "処理に失敗しました。" }));
+    }
+  }
+
   const action =
     body.action === "signUp"
       ? "signUp"
@@ -336,11 +479,13 @@ async function handler(req, res) {
       let remaining = RALLY_DAILY_LIMIT;
       let rallyLimit = RALLY_DAILY_LIMIT;
       let plan = null;
+      let trial_expired = false;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
         if (typeof r.limit === "number") rallyLimit = r.limit;
         plan = r.plan ?? null;
+        trial_expired = Boolean(r.trial_expired);
       } catch (e) {
         console.error("[auth signUp] remaining:", e);
       }
@@ -354,6 +499,7 @@ async function handler(req, res) {
           remaining,
           limit: rallyLimit,
           plan,
+          trial_expired,
         })
       );
     }
@@ -375,11 +521,13 @@ async function handler(req, res) {
     let remaining = RALLY_DAILY_LIMIT;
     let rallyLimit = RALLY_DAILY_LIMIT;
     let plan = null;
+    let trial_expired = false;
     try {
       const r = await getDailyRemaining(sbUser, user.id);
       remaining = r.remaining;
       if (typeof r.limit === "number") rallyLimit = r.limit;
       plan = r.plan ?? null;
+      trial_expired = Boolean(r.trial_expired);
     } catch (e) {
       console.error("[auth signIn] remaining:", e);
     }
@@ -393,6 +541,7 @@ async function handler(req, res) {
         remaining,
         limit: rallyLimit,
         plan,
+        trial_expired,
       })
     );
   } catch (err) {

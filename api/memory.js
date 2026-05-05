@@ -33,6 +33,10 @@
  *
  * alter table public.users enable row level security;
  * create policy users_select_own on public.users for select using (auth.uid() = id);
+ *
+ * alter table public.users add column if not exists trial_start_date date;
+ *
+ * create policy users_update_own on public.users for update using (auth.uid() = id) with check (auth.uid() = id);
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -102,27 +106,72 @@ export function dailyLimitFromPlan(planRaw) {
   return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
 }
 
-export async function getUserPlan(sb, userId) {
-  const { data, error } = await sb
-    .from("users")
-    .select("plan")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("[memory] getUserPlan:", error.message);
-    return null;
-  }
-
-  const v = data?.plan;
+function normalizePlanColumn(v) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim().toLowerCase();
   return s === "" ? null : s;
 }
 
+/** DB の日付値を JST の YYYY-MM-DD に統一 */
+export function trialStartDateToYmd(raw) {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "string") {
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  try {
+    const d = raw instanceof Date ? raw : new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return jstDateParts(d).ymd;
+  } catch {
+    return null;
+  }
+}
+
+export function addCalendarDaysToYmd(ymd, days) {
+  const d = new Date(`${ymd}T12:00:00+09:00`);
+  d.setDate(d.getDate() + days);
+  return jstDateParts(d).ymd;
+}
+
+/**
+ * plan が trial のとき、trial_start_date から 7 日目の翌日（JST）以降なら true。
+ * trial_start_date が無い場合は false（未開始扱い）。
+ */
+export function computeTrialExpired(planNorm, trialStartRaw) {
+  if (planNorm !== "trial") return false;
+  const startYmd = trialStartDateToYmd(trialStartRaw);
+  if (!startYmd) return false;
+  const { ymd: todayYmd } = jstDateParts();
+  const firstBlockedYmd = addCalendarDaysToYmd(startYmd, 7);
+  return todayYmd >= firstBlockedYmd;
+}
+
+async function fetchUserPlanTrialFromUsers(sb, userId) {
+  const { data, error } = await sb
+    .from("users")
+    .select("plan, trial_start_date")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[memory] fetchUserPlanTrialFromUsers:", error.message);
+    return { planNorm: null, trial_expired: false };
+  }
+
+  const planNorm = normalizePlanColumn(data?.plan);
+  const trial_expired = computeTrialExpired(planNorm, data?.trial_start_date);
+  return { planNorm, trial_expired };
+}
+
+export async function getUserPlan(sb, userId) {
+  const { planNorm } = await fetchUserPlanTrialFromUsers(sb, userId);
+  return planNorm;
+}
+
 export async function resolveDailyRallyLimit(sb, userId) {
-  const p = await getUserPlan(sb, userId);
-  return dailyLimitFromPlan(p);
+  const { planNorm } = await fetchUserPlanTrialFromUsers(sb, userId);
+  return dailyLimitFromPlan(planNorm);
 }
 
 /** JST で「昨日」の 00:00 〜 7日前までのメッセージ（要約用） */
@@ -170,8 +219,11 @@ export async function insertConversationRows(sb, userId, rows) {
 }
 
 export async function getDailyRemaining(sb, userId) {
-  const plan = await getUserPlan(sb, userId);
-  const limit = dailyLimitFromPlan(plan);
+  const { planNorm, trial_expired } = await fetchUserPlanTrialFromUsers(
+    sb,
+    userId
+  );
+  const limit = dailyLimitFromPlan(planNorm);
   const { ymd } = jstDateParts();
   const { data, error } = await sb
     .from("daily_usage")
@@ -186,7 +238,14 @@ export async function getDailyRemaining(sb, userId) {
   }
 
   const used = typeof data?.rally_count === "number" ? data.rally_count : 0;
-  return { remaining: Math.max(0, limit - used), used, dateKey: ymd, limit, plan };
+  return {
+    remaining: Math.max(0, limit - used),
+    used,
+    dateKey: ymd,
+    limit,
+    plan: planNorm,
+    trial_expired,
+  };
 }
 
 /** カウントを1増やし、その後の remaining を返す。limit は省略時に users.plan を再取得します。 */

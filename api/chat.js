@@ -244,6 +244,15 @@ async function handler(req, res) {
     const r = await getDailyRemaining(sb, user.id);
     remainingBefore = r.remaining;
     if (typeof r.limit === "number") rallyLimit = r.limit;
+    if (r.trial_expired) {
+      return json(res, 403, {
+        error:
+          "トライアル期間が終了しました。有料プランをお選びください。",
+        trial_expired: true,
+        remaining: r.remaining ?? 0,
+        limit: rallyLimit,
+      });
+    }
   } catch (err) {
     console.error("[chat] getDailyRemaining:", err);
     remainingBefore = RALLY_DAILY_LIMIT;
