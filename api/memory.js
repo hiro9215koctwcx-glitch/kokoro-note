@@ -102,7 +102,7 @@ export function dailyLimitFromPlan(planRaw) {
   return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
 }
 
-export async function resolveDailyRallyLimit(sb, userId) {
+export async function getUserPlan(sb, userId) {
   const { data, error } = await sb
     .from("users")
     .select("plan")
@@ -110,11 +110,19 @@ export async function resolveDailyRallyLimit(sb, userId) {
     .maybeSingle();
 
   if (error) {
-    console.warn("[memory] resolveDailyRallyLimit:", error.message);
-    return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
+    console.warn("[memory] getUserPlan:", error.message);
+    return null;
   }
 
-  return dailyLimitFromPlan(data?.plan ?? null);
+  const v = data?.plan;
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim().toLowerCase();
+  return s === "" ? null : s;
+}
+
+export async function resolveDailyRallyLimit(sb, userId) {
+  const p = await getUserPlan(sb, userId);
+  return dailyLimitFromPlan(p);
 }
 
 /** JST で「昨日」の 00:00 〜 7日前までのメッセージ（要約用） */
@@ -162,7 +170,8 @@ export async function insertConversationRows(sb, userId, rows) {
 }
 
 export async function getDailyRemaining(sb, userId) {
-  const limit = await resolveDailyRallyLimit(sb, userId);
+  const plan = await getUserPlan(sb, userId);
+  const limit = dailyLimitFromPlan(plan);
   const { ymd } = jstDateParts();
   const { data, error } = await sb
     .from("daily_usage")
@@ -177,7 +186,7 @@ export async function getDailyRemaining(sb, userId) {
   }
 
   const used = typeof data?.rally_count === "number" ? data.rally_count : 0;
-  return { remaining: Math.max(0, limit - used), used, dateKey: ymd, limit };
+  return { remaining: Math.max(0, limit - used), used, dateKey: ymd, limit, plan };
 }
 
 /** カウントを1増やし、その後の remaining を返す。limit は省略時に users.plan を再取得します。 */

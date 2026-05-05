@@ -98,16 +98,18 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
   <div id="auth-login-card" class="auth-card">
     <p class="auth-title">こころノート</p>
     <p class="auth-lead" id="auth-lead">5分で気持ちを整えるAI<br />メールでログインして始められます。</p>
+    <form id="auth-login-form" novalidate>
     <div id="auth-err" class="auth-err" style="display:none" role="alert"></div>
     <div id="auth-success" class="auth-success-msg" style="display:none" role="status"></div>
     <div class="auth-field"><label for="auth-email">メールアドレス</label><input id="auth-email" type="email" autocomplete="email" required /></div>
     <div id="auth-field-password" class="auth-field"><label for="auth-password">パスワード</label><div class="auth-pass-wrap"><input id="auth-password" class="auth-pass-field" type="text" autocomplete="current-password" required /><button type="button" class="auth-pass-eye" id="auth-pass-eye" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
     <div class="auth-actions">
-      <button type="button" class="btn-auth-primary" id="auth-submit">ログイン</button>
+      <button type="submit" class="btn-auth-primary" id="auth-submit">ログイン</button>
       <button type="button" class="btn-auth-secondary" id="auth-toggle">アカウントをお持ちでない方（新規登録）</button>
     </div>
     <div id="auth-forgot-row" class="auth-muted-row"><button type="button" id="auth-forgot" class="auth-link-muted">パスワードをお忘れの方</button></div>
     <div id="auth-back-reset-row" class="auth-muted-row auth-hide"><button type="button" id="auth-back-login" class="auth-link-muted">ログイン画面に戻る</button></div>
+    </form>
   </div>
   <div id="auth-update-card" class="auth-card auth-hide">
     <p class="auth-title" id="upd-heading">新しいパスワードを設定</p>
@@ -174,6 +176,7 @@ var authSucc=document.getElementById("auth-success");
 var authLead=document.getElementById("auth-lead");
 var authEmail=document.getElementById("auth-email");
 var authPass=document.getElementById("auth-password");
+var authLoginForm=document.getElementById("auth-login-form");
 var authSubmit=document.getElementById("auth-submit");
 var authToggle=document.getElementById("auth-toggle");
 var authFieldPw=document.getElementById("auth-field-password");
@@ -227,6 +230,48 @@ function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("au
 function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t||"";planModalErr.classList.toggle("is-visible",!!t)}
 function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}}
 function startFreeTrialAndChat(){closePlanChoiceModal();showChatView();logEl.innerHTML="";apiMsgs=[];initFromServer()}
+
+function needsPlanChoiceModal(planToken){
+  var p=null;
+  if(planToken!==undefined&&planToken!==null){
+    var t=String(planToken).trim().toLowerCase();
+    if(t)p=t;
+  }
+  if(p==="light"||p==="standard")return false;
+  return true;
+}
+
+function enterChatSkippingPlanChoice(){
+  closePlanChoiceModal();
+  showChatView();
+  logEl.innerHTML="";
+  apiMsgs=[];
+  initFromServer();
+}
+
+/** ログイン済みで ?plan= など付きの復帶時に、有料プランならチャットのみ */
+function bootstrapReturningUserPlanGate(lpPrefill){
+  var tok=getTok();
+  if(!tok){console.error("[bootstrap plan-gate] トークンがありません");showAuthView();syncAuthUi();return;}
+  fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
+    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(eParse){console.error("[bootstrap plan-gate] JSON解析失敗",eParse)}return {res:res,j:j};})})
+    .then(function(x){
+      if(!x.res.ok){
+        console.error("[bootstrap plan-gate] GET api/auth NG",x.res.status,x.j);
+        throw new Error("セッションの確認に失敗しました ("+x.res.status+")");
+      }
+      if(typeof x.j.limit==="number")LIM=x.j.limit;
+      if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+      if(!needsPlanChoiceModal(x.j.plan)){
+        enterChatSkippingPlanChoice();
+        return;
+      }
+      showAuthView();
+      syncAuthUi();
+      openPlanChoiceModal(lpPrefill);
+    })
+    .catch(function(e){console.error("[bootstrap plan-gate]",e&&e.stack||e);showAuthView();syncAuthUi();openPlanChoiceModal(lpPrefill);});
+}
 
 function parsePlanQuery(){try{var raw=window.location.search||"",sp=new URLSearchParams(raw.charAt(0)==="?"?raw.slice(1):raw),p=(sp.get("plan")||"").trim().toLowerCase();if(p==="light_monthly"||p==="light_yearly"||p==="standard_monthly"||p==="standard_yearly")return p}catch(e){}return null}
 function stripeCheckoutRedirect(planKey,opt){
@@ -348,24 +393,40 @@ function initFromServer(){
 }
 
 function submitRecover(){authErrHide();authSuccessHide();var em=(authEmail.value||"").trim();if(!em){authErrShow("メールアドレスを入力してください");return}
+if(!authSubmit){console.error("[submitRecover] auth-submit がありません");return}
 authSubmit.disabled=true;
-resetPasswordViaApi(em).then(function(){authSuccessShow("パスワードリセットメールを送信しました")}).catch(function(e){authErrShow(e&&e.message?e.message:"送信に失敗しました")}).finally(function(){authSubmit.disabled=false});
+resetPasswordViaApi(em).then(function(){authSuccessShow("パスワードリセットメールを送信しました")}).catch(function(e){console.error("[submitRecover]",e);authErrShow(e&&e.message?e.message:"送信に失敗しました")}).finally(function(){authSubmit.disabled=false});
 }
-function submitAuth(){authErrHide();authSuccessHide();if(resetMode){submitRecover();return}var em=(authEmail.value||"").trim(),pw=authPass.value||"";if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
-authSubmit.disabled=true;
-fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:registerMode?"signUp":"signIn",email:em,password:pw})})
-  .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-  .then(function(x){if(!x.res.ok)throw new Error((x.j&&x.j.error)||"認証に失敗しました");if(x.j.needEmailConfirm){authErrShow(x.j.message||"確認メールをご確認ください");return}if(!x.j.access_token)throw new Error("トークンを取得できませんでした");
-    sessionStorage.removeItem(MSG_SNAP);
-    var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user};
-    setSession(sess);
-    if(typeof x.j.limit==="number")LIM=x.j.limit;
-    if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
-    authPass.value="";
-    openPlanChoiceModal(parsePlanQuery());
-  })
-  .catch(function(e){authErrShow(e&&e.message?e.message:"通信エラーです")})
-  .finally(function(){authSubmit.disabled=false});
+function submitAuth(){
+  try{
+    authErrHide();authSuccessHide();
+    if(!authSubmit){console.error("[kokoro submitAuth] #auth-submit が見つかりません");return}
+    if(resetMode){submitRecover();return}
+    var em=(authEmail.value||"").trim(),pw=authPass.value||"";
+    if(!em||!pw){authErrShow("メールアドレスとパスワードを入力してください");return}
+    authSubmit.disabled=true;
+    fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:registerMode?"signUp":"signIn",email:em,password:pw})})
+      .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(eParse){console.error("[kokoro auth] レスポンスJSON解析エラー",eParse)}return {res:res,j:j};})})
+      .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||"認証に失敗しました");}if(x.j.needEmailConfirm){authErrShow(x.j.message||"確認メールをご確認ください");return}if(!x.j.access_token)throw new Error("トークンを取得できませんでした");
+        sessionStorage.removeItem(MSG_SNAP);
+        var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user};
+        setSession(sess);
+        if(typeof x.j.limit==="number")LIM=x.j.limit;
+        if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+        authPass.value="";
+        if(needsPlanChoiceModal(x.j.plan)){
+          openPlanChoiceModal(parsePlanQuery());
+        }else{
+          enterChatSkippingPlanChoice();
+        }
+      })
+      .catch(function(e){console.error("[kokoro auth POST]",e);authErrShow(e&&e.message?e.message:"通信エラーです")})
+      .finally(function(){authSubmit.disabled=false});
+  }catch(z){
+    console.error("[kokoro submitAuth]",z);
+    authErrShow("ログイン処理でエラーが発生しました。もう一度お試しください。");
+    try{authSubmit.disabled=false}catch(eIgn){}
+  }
 }
 
 updEye1.addEventListener("click",function(){passVisibleUpd1=!passVisibleUpd1;applyUpdPassVisibility()});
@@ -375,8 +436,8 @@ updSubmit.addEventListener("click",submitUpdatePassword);
 authToggle.addEventListener("click",function(){registerMode=!registerMode;resetMode=false;syncAuthUi();authErrHide();authSuccessHide()});
 authForgot.addEventListener("click",function(){resetMode=true;registerMode=false;syncAuthUi();authErrHide();authSuccessHide()});
 authBackLogin.addEventListener("click",function(){resetMode=false;syncAuthUi();authErrHide();authSuccessHide()});
+if(authLoginForm){authLoginForm.addEventListener("submit",function(ev){ev.preventDefault();submitAuth()})}else{console.error("[kokoro] auth-login-form が見つかりません（ログイン送信に失敗する可能性があります）")}
 authPassEye.addEventListener("click",function(){passVisible=!passVisible;applyPassVisibility()});
-authSubmit.addEventListener("click",submitAuth);
 btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM)});
 planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
 planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
@@ -431,7 +492,7 @@ function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/
 function stopR(){if(!reco)return;try{reco.stop()}catch(err){}}
 bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if(recOn)stopR();else startR()})}
 
-var recParse=parseRecoveryFromUrl();if(recParse){enterRecoveryPasswordFlow(recParse)}else{recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){showAuthView();syncAuthUi();openPlanChoiceModal(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}}
+var recParse=parseRecoveryFromUrl();if(recParse){enterRecoveryPasswordFlow(recParse)}else{recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){bootstrapReturningUserPlanGate(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}}
 ["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});
 })();
 </script>

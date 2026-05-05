@@ -87,10 +87,12 @@ async function handler(req, res) {
 
       let remaining = RALLY_DAILY_LIMIT;
       let rallyLimit = RALLY_DAILY_LIMIT;
+      let plan = null;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
         if (typeof r.limit === "number") rallyLimit = r.limit;
+        plan = r.plan ?? null;
       } catch (err) {
         console.error("[auth GET] remaining:", err);
       }
@@ -101,6 +103,7 @@ async function handler(req, res) {
           user: { id: user.id, email: user.email },
           remaining,
           limit: rallyLimit,
+          plan,
         })
       );
     } catch (err) {
@@ -332,10 +335,12 @@ async function handler(req, res) {
       const sbUser = createUserSupabase(session.access_token);
       let remaining = RALLY_DAILY_LIMIT;
       let rallyLimit = RALLY_DAILY_LIMIT;
+      let plan = null;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
         if (typeof r.limit === "number") rallyLimit = r.limit;
+        plan = r.plan ?? null;
       } catch (e) {
         console.error("[auth signUp] remaining:", e);
       }
@@ -348,6 +353,7 @@ async function handler(req, res) {
           user: { id: user.id, email: user.email },
           remaining,
           limit: rallyLimit,
+          plan,
         })
       );
     }
@@ -368,10 +374,12 @@ async function handler(req, res) {
     const sbUser = createUserSupabase(session.access_token);
     let remaining = RALLY_DAILY_LIMIT;
     let rallyLimit = RALLY_DAILY_LIMIT;
+    let plan = null;
     try {
       const r = await getDailyRemaining(sbUser, user.id);
       remaining = r.remaining;
       if (typeof r.limit === "number") rallyLimit = r.limit;
+      plan = r.plan ?? null;
     } catch (e) {
       console.error("[auth signIn] remaining:", e);
     }
@@ -384,6 +392,7 @@ async function handler(req, res) {
         user: { id: user.id, email: user.email },
         remaining,
         limit: rallyLimit,
+        plan,
       })
     );
   } catch (err) {
