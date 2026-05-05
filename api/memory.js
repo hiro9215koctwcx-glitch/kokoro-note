@@ -14,9 +14,9 @@
  *
  * create table public.daily_usage (
  *   user_id uuid not null references auth.users(id) on delete cascade,
- *   usage_date date not null,
+ *   date date not null,
  *   rally_count int not null default 0,
- *   primary key (user_id, usage_date)
+ *   primary key (user_id, date)
  * );
  *
  * RLS を有効化し、authenticated ユーザーが自分の user_id の行のみ操作できるポリシーを追加してください。
@@ -177,7 +177,7 @@ export async function getDailyRemaining(sb, userId) {
     .from("daily_usage")
     .select("rally_count")
     .eq("user_id", userId)
-    .eq("usage_date", ymd)
+    .eq("date", ymd)
     .maybeSingle();
 
   if (error) {
@@ -200,7 +200,7 @@ export async function incrementDailyRally(sb, userId, preResolvedLimit) {
     .from("daily_usage")
     .select("rally_count")
     .eq("user_id", userId)
-    .eq("usage_date", ymd)
+    .eq("date", ymd)
     .maybeSingle();
 
   if (selErr) {
@@ -212,10 +212,10 @@ export async function incrementDailyRally(sb, userId, preResolvedLimit) {
   const { error: upErr } = await sb.from("daily_usage").upsert(
     {
       user_id: userId,
-      usage_date: ymd,
+      date: ymd,
       rally_count: next,
     },
-    { onConflict: "user_id,usage_date" }
+    { onConflict: "user_id,date" }
   );
 
   if (upErr) {
