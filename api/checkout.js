@@ -4,14 +4,8 @@
  */
 
 import Stripe from "stripe";
+import { PLAN_TO_PRICE_ID } from "./_lib/price-map.js";
 import { createUserSupabase } from "./memory.js";
-
-const PLAN_TO_PRICE_ID = Object.freeze({
-  light_monthly: "price_1TTWqzDC3iFaV6mGmBTdG5jC",
-  light_yearly: "price_1TTWsqDC3iFaV6mGe6ij1Akt",
-  standard_monthly: "price_1TTWtgDC3iFaV6mGPCOV753D",
-  standard_yearly: "price_1TTWuTDC3iFaV6mGKnbQgCEV",
-});
 
 const DEFAULT_SITE_ORIGIN = "https://kokoro-note-umber.vercel.app";
 
