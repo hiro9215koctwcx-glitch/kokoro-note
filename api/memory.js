@@ -135,7 +135,8 @@ export function addCalendarDaysToYmd(ymd, days) {
 }
 
 /**
- * plan が trial のとき、trial_start_date から 7 日目の翌日（JST）以降なら true。
+ * plan が trial のときのみ判定。light / standard は対象外（常に false）。
+ * trial_start_date は JST の日付。開始日から 7 暦日分をトライアルとし、その翌日から期限切れ。
  * trial_start_date が無い場合は false（未開始扱い）。
  */
 export function computeTrialExpired(planNorm, trialStartRaw) {
