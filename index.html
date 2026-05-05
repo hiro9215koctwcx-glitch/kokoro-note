@@ -525,7 +525,20 @@ function stripMarkdownForSpeech(raw){var s=String(raw||"");s=s.replace(/\*\*([\s
 function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");if(!err&&role==="ai"){b.innerHTML=formatAiBubbleHtml(text)}else{b.textContent=text}row.appendChild(b);logEl.appendChild(row);scrollBot();return row}
 function hidePcTtsStopBtn(){if(bTtsStop)bTtsStop.classList.add("auth-hide")}
 function showPcTtsStopBtn(){if(bTtsStop)bTtsStop.classList.remove("auth-hide")}
-function stopAud(){hidePcTtsStopBtn();try{if(aud){aud.pause();try{aud.currentTime=0}catch(e){};aud.src=""}}catch(e){}aud=null}
+function revokeKokoroTtsBlobUrl(audioEl){if(!audioEl||!audioEl._kokoroTtsBlobUrl)return;try{URL.revokeObjectURL(audioEl._kokoroTtsBlobUrl)}catch(e){}audioEl._kokoroTtsBlobUrl=null}
+function kokoroTtsBlobUrlFromBase64(b64){
+  try{
+    var byteCharacters=atob(b64);
+    var ln=byteCharacters.length;
+    var byteNumbers=new Array(ln);
+    var i;
+    for(i=0;i<ln;i++){byteNumbers[i]=byteCharacters.charCodeAt(i)}
+    var byteArray=new Uint8Array(byteNumbers);
+    var outBlob=new Blob([byteArray],{type:"audio/mpeg"});
+    return URL.createObjectURL(outBlob);
+  }catch(err){throw new Error("音声データの変換に失敗しました")}
+}
+function stopAud(){hidePcTtsStopBtn();try{if(aud){revokeKokoroTtsBlobUrl(aud);aud.pause();try{aud.currentTime=0}catch(e){};aud.src=""}}catch(e){}aud=null}
 var ttsPrimed=false;
 function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var ctx=new AC();var resume=ctx.resume&&ctx.resume.bind(ctx);if(resume){resume().catch(function(){})}var osc=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=0;osc.connect(gain);gain.connect(ctx.destination);osc.start(0);osc.stop(ctx.currentTime+0.02)}}catch(e){logErr("[TTS prime]",e)}finally{ttsPrimed=true}}
 
@@ -564,7 +577,7 @@ function attachIosTtsListenButton(aiMsgRow,text){
   aiMsgRow.after(wrap);
   var iosUi={playBtn:playBtn,stopBtn:stopBtn,wrap:wrap,defaultPlayLabel:defaultPlayLabel,abortPlayback:null};
   playBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(playBtn.disabled)return;primeAudioPlayback();playBtn.disabled=true;playBtn.textContent="音声を準備中...";playAssistantTTS(text,iosUi)},false);
-  stopBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(typeof iosUi.abortPlayback==="function"){try{iosUi.abortPlayback()}catch(eAb){}iosUi.abortPlayback=null}try{if(aud){aud.pause();try{aud.currentTime=0}catch(eT){};aud.src=""}}catch(eA){}aud=null;stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)},false);
+  stopBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(typeof iosUi.abortPlayback==="function"){try{iosUi.abortPlayback()}catch(eAb){}iosUi.abortPlayback=null}try{if(aud){revokeKokoroTtsBlobUrl(aud);aud.pause();try{aud.currentTime=0}catch(eT){};aud.src=""}}catch(eA){}aud=null;stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)},false);
 }
 function refreshIosTtsOffersFromHistory(){if(!isIOS)return;removeIosTtsOfferRows();if(!ttsOn)return;var px=peekLastAssistantText();var tgt=resolveLastAiBubbleRow();if(px&&tgt)attachIosTtsListenButton(tgt,px)}
 function scheduleAssistantTts(text,optAiRow){if(!ttsOn||!text)return;if(isIOS){var tgt=null;if(optAiRow&&optAiRow.classList&&optAiRow.classList.contains("ai"))tgt=optAiRow;if(!tgt)tgt=resolveLastAiBubbleRow();if(tgt)attachIosTtsListenButton(tgt,text);return}playAssistantTTS(text)}
@@ -602,7 +615,9 @@ function playAssistantTTS(t,iosUi){
       });
     })
     .then(function(b64){
-      var a=new Audio("data:audio/mp3;base64,"+b64);
+      var blobUrl=kokoroTtsBlobUrlFromBase64(b64);
+      var a=new Audio(blobUrl);
+      a._kokoroTtsBlobUrl=blobUrl;
       aud=a;
       var showPcStop=!iosUi&&!isIOS;
       if(showPcStop)showPcTtsStopBtn();
@@ -611,6 +626,7 @@ function playAssistantTTS(t,iosUi){
         iosUi.stopBtn.classList.remove("auth-hide");
       }
       var cleanup=function(){
+        revokeKokoroTtsBlobUrl(a);
         a.removeEventListener("ended",onEnded);
         a.removeEventListener("error",onErr);
       };
