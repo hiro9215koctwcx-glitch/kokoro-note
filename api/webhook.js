@@ -4,13 +4,14 @@
  * 必要な環境変数:
  * - STRIPE_WEBHOOK_SECRET (whsec_…)
  * - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY （RLS をバイパスして DB 更新）
- * - STRIPE_SECRET_KEY （セッションに metadata が無いときサブスク metadata を取得するフォールバック）
+ * - STRIPE_SECRET_KEY （サブスク metadata フォールバック／insert 時の Customer email 取得に使用）
  *
  * public.users が無い場合の例（Supabase SQL）:
  *
  * create table public.users (
  *   id uuid primary key references auth.users(id) on delete cascade,
- *   plan text
+ *   plan text,
+ *   email text not null
  * );
  */
 
@@ -116,9 +117,42 @@ async function handleCheckoutSessionCompleted(session) {
   }
 
   if (!data?.length) {
-    const { error: insErr } = await supabase
-      .from("users")
-      .insert({ id: userIdRaw, plan: planColumn });
+    if (!stripe) {
+      console.error(
+        "[webhook] users insert をスキップ: STRIPE_SECRET_KEY がなく customer を取得できません。"
+      );
+      return;
+    }
+    const customerRef = session.customer;
+    const customerId =
+      typeof customerRef === "string" ? customerRef : customerRef?.id;
+    if (!customerId) {
+      console.error(
+        "[webhook] users insert をスキップ: session.customer がありません。"
+      );
+      return;
+    }
+
+    const customer = await stripe.customers.retrieve(customerId);
+    const email =
+      customer && !customer.deleted && "email" in customer
+        ? customer.email ?? null
+        : null;
+
+    if (!email) {
+      console.error(
+        "[webhook] users insert をスキップ: customer.email が取得できません。",
+        customerId
+      );
+      return;
+    }
+
+    const { error: insErr } = await supabase.from("users").insert({
+      id: userIdRaw,
+      plan: planColumn,
+      email,
+    });
+
     if (insErr) {
       console.error("[webhook] users insert failed", insErr);
       throw insErr;
