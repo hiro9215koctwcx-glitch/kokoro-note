@@ -23,6 +23,10 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .row{display:flex;margin-bottom:14px;align-items:flex-end}
 .row.ai{justify-content:flex-start}
 .row.user{justify-content:flex-end}
+.row.tts-ios-offer-row{justify-content:flex-start;margin:-4px 0 14px;width:100%;padding:0 16px}
+.tts-ios-offer-inner{width:88%;max-width:88%}
+.tts-ios-play-btn{display:inline-flex;align-items:center;gap:4px;margin:0;padding:8px 12px;font-family:inherit;font-size:.8125rem;font-weight:500;color:var(--green-deep);background:var(--white);border:1px solid rgba(143,163,149,.55);border-radius:12px;box-shadow:0 2px 8px var(--sh);cursor:pointer;line-height:1.35}
+.tts-ios-play-btn:active{transform:scale(.98)}
 .bubble{max-width:88%;padding:14px 16px;border-radius:18px;font-size:.9375rem;line-height:1.65;box-shadow:0 4px 20px var(--sh);word-break:break-word}
 .row.ai .bubble{background:var(--white);border-bottom-left-radius:6px}
 .row.user .bubble{background:var(--bubble);border-bottom-right-radius:6px}
@@ -199,6 +203,7 @@ var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログイ
 var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再設定用のリンクをお送りします。";
 var SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micHintTimer=null,micOk=!!SpeechRecognitionCtor;
+var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
 var suppressMrTranscript=false,whisperSending=false,mrStream=null,mrRecorder=null,mrChunks=[],mrMime="",micFallbackInput=null;
 var VOICE_HINTS_LS_KEY="kokoro_voice_hints_seen",voiceHintsPersistRegistered=false;
 
@@ -279,7 +284,7 @@ function showTrialEndedScreen(){closePlanChoiceModal();var te=document.getElemen
 
 function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
 
-function renderAllBubbles(){logEl.innerHTML="";var i,m;for(i=0;i<apiMsgs.length;i++){m=apiMsgs[i];if(m.role==="user")addBubble("user",m.content,false);else addBubble("ai",m.content,false)}scrollBot()}
+function renderAllBubbles(){logEl.innerHTML="";var i,m;for(i=0;i<apiMsgs.length;i++){m=apiMsgs[i];if(m.role==="user")addBubble("user",m.content,false);else addBubble("ai",m.content,false)}scrollBot();refreshIosTtsOffersFromHistory()}
 
 function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)return false;var o=JSON.parse(raw);if(!o.userId||o.userId!==userId()||!Array.isArray(o.messages)||!o.messages.length)return false;apiMsgs=o.messages.slice();if(typeof o.remaining==="number")remainCount=o.remaining;renderAllBubbles();updRallyRemain(remainCount);return true}catch(e){return false}}
 
@@ -493,12 +498,18 @@ function scrollBot(){requestAnimationFrame(function(){logEl.scrollTop=logEl.scro
 function escapeHtml(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function formatAiBubbleHtml(raw){var s=escapeHtml(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"<strong>$1</strong>");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1<em>$2</em>");s=s.replace(/\n/g,"<br>");return s}
 function stripMarkdownForSpeech(raw){var s=String(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"$1");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1$2");return s.replace(/\*+/g," ").replace(/\s+/g," ").trim()}
-function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");if(!err&&role==="ai"){b.innerHTML=formatAiBubbleHtml(text)}else{b.textContent=text}row.appendChild(b);logEl.appendChild(row);scrollBot()}
+function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");if(!err&&role==="ai"){b.innerHTML=formatAiBubbleHtml(text)}else{b.textContent=text}row.appendChild(b);logEl.appendChild(row);scrollBot();return row}
 function stopAud(){try{if(aud){aud.pause();aud.src=""}}catch(e){}aud=null}
 var ttsPrimed=false;
 function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var ctx=new AC();var resume=ctx.resume&&ctx.resume.bind(ctx);if(resume){resume().catch(function(){})}var osc=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=0;osc.connect(gain);gain.connect(ctx.destination);osc.start(0);osc.stop(ctx.currentTime+0.02)}}catch(e){logErr("[TTS prime]",e)}finally{ttsPrimed=true}}
 
-function speak(t){if(!ttsOn||!t)return;var url=resolveApi("api/tts"),txt=stripMarkdownForSpeech(t);if(!txt)return;stopAud();fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:txt}),credentials:"same-origin"}).then(function(r){return r.blob().then(function(blob){return{r:r,blob:blob}})}).then(function(x){var hdr=(x.r.headers&&x.r.headers.get&&x.r.headers.get("content-type")||"").toLowerCase(),ct=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;if(!x.r.ok||ct){return x.blob.text().then(function(raw){var j={};try{j=raw?JSON.parse(raw):{}}catch(e){}throw new Error((j&&j.error)||raw||("TTS HTTP "+x.r.status))})}if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");return x.blob}).then(function(blob){var u=URL.createObjectURL(blob),a=new Audio();a.src=u;aud=a;var cleanup=function(){try{URL.revokeObjectURL(u)}catch(e){}a.removeEventListener("ended",cleanup);a.removeEventListener("error",onErr)};var onErr=function(){cleanup();logErr("[TTS 要素エラー]",a.error||"Audio error")};a.addEventListener("ended",cleanup);a.addEventListener("error",onErr);return a.play().then(function(){return null}).catch(function(playErr){cleanup();throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）")})}).catch(function(err){logErr("[TTS] "+url,err)})}
+function removeIosTtsOfferRows(){var n=logEl.querySelectorAll(".tts-ios-offer-row"),i;for(i=0;i<n.length;i++){try{n[i].remove()}catch(e){}}}
+function resolveLastAiBubbleRow(){var els=logEl.querySelectorAll(".row.ai");var i,b;for(i=els.length-1;i>=0;i--){b=els[i].querySelector(".bubble");if(b&&!b.classList.contains("err"))return els[i]}return null}
+function peekLastAssistantText(){var i,m;for(i=apiMsgs.length-1;i>=0;i--){m=apiMsgs[i];if(m&&m.role==="assistant"&&typeof m.content==="string"&&String(m.content).trim())return m.content}return""}
+function attachIosTtsListenButton(aiMsgRow,text){if(!text)return;var plain=stripMarkdownForSpeech(text);if(!plain)return;removeIosTtsOfferRows();if(!aiMsgRow)return;var wrap=document.createElement("div");wrap.className="row ai tts-ios-offer-row";var inner=document.createElement("div");inner.className="tts-ios-offer-inner";var btn=document.createElement("button");btn.type="button";btn.className="tts-ios-play-btn";btn.setAttribute("aria-label","音声を再生");btn.textContent="🔊 タップして音声を聞く";btn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};primeAudioPlayback();playAssistantTTS(text)},false);inner.appendChild(btn);wrap.appendChild(inner);aiMsgRow.after(wrap)}
+function refreshIosTtsOffersFromHistory(){if(!isIOS)return;removeIosTtsOfferRows();if(!ttsOn)return;var px=peekLastAssistantText();var tgt=resolveLastAiBubbleRow();if(px&&tgt)attachIosTtsListenButton(tgt,px)}
+function scheduleAssistantTts(text,optAiRow){if(!ttsOn||!text)return;if(isIOS){var tgt=null;if(optAiRow&&optAiRow.classList&&optAiRow.classList.contains("ai"))tgt=optAiRow;if(!tgt)tgt=resolveLastAiBubbleRow();if(tgt)attachIosTtsListenButton(tgt,text);return}playAssistantTTS(text)}
+function playAssistantTTS(t){if(!ttsOn||!t)return;var url=resolveApi("api/tts"),txt=stripMarkdownForSpeech(t);if(!txt)return;stopAud();fetch(url,{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8"},body:JSON.stringify({text:txt}),credentials:"same-origin"}).then(function(r){return r.blob().then(function(blob){return{r:r,blob:blob}})}).then(function(x){var hdr=(x.r.headers&&x.r.headers.get&&x.r.headers.get("content-type")||"").toLowerCase(),ct=hdr.indexOf("application/json")!==-1||hdr.indexOf("json")!==-1;if(!x.r.ok||ct){return x.blob.text().then(function(raw){var j={};try{j=raw?JSON.parse(raw):{}}catch(e){}throw new Error((j&&j.error)||raw||("TTS HTTP "+x.r.status))})}if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");return x.blob}).then(function(blob){var u=URL.createObjectURL(blob),a=new Audio();a.src=u;aud=a;var cleanup=function(){try{URL.revokeObjectURL(u)}catch(e){}a.removeEventListener("ended",cleanup);a.removeEventListener("error",onErr)};var onErr=function(){cleanup();logErr("[TTS 要素エラー]",a.error||"Audio error")};a.addEventListener("ended",cleanup);a.addEventListener("error",onErr);return a.play().then(function(){return null}).catch(function(playErr){cleanup();throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）")})}).catch(function(err){logErr("[TTS] "+url,err)})}
 
 function initFromServer(){
   sending=true;
@@ -522,7 +533,7 @@ function initFromServer(){
       if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
       if(typeof x.j.limit==="number")LIM=x.j.limit;
       if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));
-      speak(msg);
+      if(!isIOS){playAssistantTTS(msg)}
     })
     .catch(function(e){logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",(e&&e.message)?e.message:fb,true)})
     .finally(function(){sending=false;updRallyRemain(remainCount);try{inp.focus()}catch(z){}});
@@ -624,7 +635,7 @@ function send(){
         return;
       }
       if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}
-      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));speak(msg);
+      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});var aiRowAdded=addBubble("ai",msg);persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRowAdded);
     })
     .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",m,true);if(e&&e._status===429)updRallyRemain(0)})
     .finally(function(){sending=false;updRallyRemain(remainCount)});
@@ -638,7 +649,7 @@ inp.addEventListener("keydown",function(ev){if(ev.key!=="Enter"||ev.shiftKey){la
 
 bSend.addEventListener("click",function(){if(remain()>0&&!sending)send()});
 
-bTts.addEventListener("click",function(){ttsOn=!ttsOn;bTts.setAttribute("aria-pressed",ttsOn?"true":"false");if(ttsOn){primeAudioPlayback();bTts.classList.add("tts-on");bTts.textContent="読み上げ ON"}else{bTts.classList.remove("tts-on");bTts.textContent="読み上げ OFF";stopAud()}});
+bTts.addEventListener("click",function(){ttsOn=!ttsOn;bTts.setAttribute("aria-pressed",ttsOn?"true":"false");if(ttsOn){primeAudioPlayback();bTts.classList.add("tts-on");bTts.textContent="読み上げ ON";refreshIosTtsOffersFromHistory()}else{bTts.classList.remove("tts-on");bTts.textContent="読み上げ OFF";stopAud();removeIosTtsOfferRows()}});
 
 if(useWhisperMic){
 bMic.title="録音開始／停止（音声を文字にします）";
