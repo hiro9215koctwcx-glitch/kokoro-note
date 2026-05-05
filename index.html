@@ -413,7 +413,7 @@ function authErrHide(){authErr.style.display="none";authErr.textContent=""}
 function authSuccessShow(t){authSucc.style.display="block";authSucc.textContent=t||""}
 function authSuccessHide(){authSucc.style.display="none";authSucc.textContent=""}
 
-function parseRecoveryFromUrl(){try{var h=(window.location.hash||"").replace(/^#/,""),qRaw=window.location.search||"",spH=new URLSearchParams(h),spQ=new URLSearchParams(qRaw.charAt(0)==="?"?qRaw.slice(1):qRaw),at=spH.get("access_token")||spQ.get("access_token")||null,rf=spH.get("refresh_token")||spQ.get("refresh_token")||null,co=spQ.get("code")||spH.get("code")||null;if(!(at||co))return null;console.log("[kokoro recovery] access_token:",at);console.log("[kokoro recovery] refresh_token:",rf);console.log("[kokoro recovery] code:",co);return{access_token:at,refresh_token:rf,code:co}}catch(e){return null}}
+function parseRecoveryFromUrl(){try{var h=(window.location.hash||"").replace(/^#/,""),qRaw=window.location.search||"",spH=new URLSearchParams(h),spQ=new URLSearchParams(qRaw.charAt(0)==="?"?qRaw.slice(1):qRaw),at=spH.get("access_token")||spQ.get("access_token")||null,rf=spH.get("refresh_token")||spQ.get("refresh_token")||null,co=spQ.get("code")||spH.get("code")||null,tp=String(spH.get("type")||spQ.get("type")||"").trim().toLowerCase();if(!(at||co))return null;console.log("[kokoro auth hash] type:",tp||"(none)","refresh_token:",rf);return{access_token:at,refresh_token:rf,code:co,type:tp||null}}catch(e){return null}}
 function stripAuthFromUrl(){try{var u=new URL(window.location.href);u.hash="";var sp=new URLSearchParams(u.search);["access_token","refresh_token","expires_in","token_type","type","code","state","scope"].forEach(function(k){sp.delete(k)});var qq=sp.toString();u.search=qq?"?"+qq:"";history.replaceState(null,"",u.pathname+u.search+u.hash)}catch(e){}}
 function updErrShow(t){updErr.style.display="block";updErr.textContent=t||""}
 function updErrHide(){updErr.style.display="none";updErr.textContent=""}
@@ -590,7 +590,15 @@ function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/
 function stopR(){if(!reco)return;try{reco.stop()}catch(err){}}
 bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if(recOn)stopR();else startR()})}
 
-var recParse=parseRecoveryFromUrl();if(recParse){enterRecoveryPasswordFlow(recParse)}else{recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){bootstrapReturningUserPlanGate(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}}
+var recParse=parseRecoveryFromUrl();
+if(recParse){
+  if(recParse.type==="signup"){
+    recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;
+    showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessShow("メール認証が完了しました。ログインしてください。");stripAuthFromUrl()
+  }else{
+    enterRecoveryPasswordFlow(recParse)
+  }
+}else{recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){bootstrapReturningUserPlanGate(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}}
 ["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});
 })();
 </script>
