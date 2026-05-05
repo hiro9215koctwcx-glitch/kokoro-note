@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-:root{--bg:#faf8f5;--white:#fff;--green:#8fa395;--green-deep:#6d8576;--bubble:#e8eee9;--text:#3d3d3d;--muted:#6b6b6b;--danger:#e85d5d;--sh:rgba(80,70,60,.08)}
+:root{--bg:#faf8f5;--white:#fff;--green:#8fa395;--green-deep:#6d8576;--bubble:#e8eee9;--text:#3d3d3d;--muted:#6b6b6b;--text-muted:var(--muted);--danger:#e85d5d;--sh:rgba(80,70,60,.08)}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;min-height:100dvh;font-family:"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(250,248,245,.98),rgba(250,248,245,.92));backdrop-filter:blur(8px);border-bottom:1px solid rgba(143,163,149,.25);padding:max(14px,env(safe-area-inset-top)) 20px 14px}
@@ -73,6 +73,9 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .auth-switch{text-align:center;font-size:.8125rem;color:var(--muted);margin-top:14px;line-height:1.5}
 .auth-switch button{border:none;background:none;color:var(--green-deep);text-decoration:underline;cursor:pointer;padding:0;font:inherit}
 .auth-err{font-size:.8125rem;color:#a04444;margin-top:12px;text-align:center}
+.auth-lp-back{display:block;text-align:center;margin-top:18px;font-size:.85rem;color:var(--text-muted);background:none;text-decoration:none;font-family:inherit;padding:4px 0;line-height:1.45}
+.auth-lp-back:hover,.auth-lp-back:active{color:var(--text-muted);text-decoration:none}
+.auth-lp-back:focus-visible{outline:2px solid rgba(109,133,118,.35);outline-offset:2px;border-radius:6px}
 .plan-modal-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(61,61,61,.45);backdrop-filter:blur(4px);-webkit-overflow-scrolling:touch;overflow-y:auto}
 .plan-modal-window{width:100%;max-width:432px;background:var(--white);border-radius:22px;box-shadow:0 20px 50px rgba(80,70,60,.2);padding:26px 22px 24px;margin:auto}
 .plan-modal-window .plan-modal-title{font-size:1.2rem;font-weight:600;text-align:center;margin:0 0 10px;color:var(--text);letter-spacing:.03em}
@@ -109,6 +112,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     </div>
     <div id="auth-forgot-row" class="auth-muted-row"><button type="button" id="auth-forgot" class="auth-link-muted">パスワードをお忘れの方</button></div>
     <div id="auth-back-reset-row" class="auth-muted-row auth-hide"><button type="button" id="auth-back-login" class="auth-link-muted">ログイン画面に戻る</button></div>
+    <a class="auth-lp-back" href="https://kokoro-note-lp.vercel.app/">← サービス紹介ページに戻る</a>
     </form>
   </div>
   <div id="auth-update-card" class="auth-card auth-hide">
