@@ -73,6 +73,22 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .auth-switch{text-align:center;font-size:.8125rem;color:var(--muted);margin-top:14px;line-height:1.5}
 .auth-switch button{border:none;background:none;color:var(--green-deep);text-decoration:underline;cursor:pointer;padding:0;font:inherit}
 .auth-err{font-size:.8125rem;color:#a04444;margin-top:12px;text-align:center}
+.plan-modal-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(61,61,61,.45);backdrop-filter:blur(4px);-webkit-overflow-scrolling:touch;overflow-y:auto}
+.plan-modal-window{width:100%;max-width:432px;background:var(--white);border-radius:22px;box-shadow:0 20px 50px rgba(80,70,60,.2);padding:26px 22px 24px;margin:auto}
+.plan-modal-window .plan-modal-title{font-size:1.2rem;font-weight:600;text-align:center;margin:0 0 10px;color:var(--text);letter-spacing:.03em}
+.plan-modal-window .plan-modal-lead{font-size:.875rem;color:var(--muted);text-align:center;line-height:1.55;margin:0 0 18px}
+.plan-modal-err{font-size:.8125rem;color:#a04444;text-align:center;margin:0 0 12px;min-height:1.25em;display:none}
+.plan-modal-err.is-visible{display:block}
+.plan-cards{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.plan-card{width:100%;text-align:left;border:2px solid rgba(143,163,149,.42);border-radius:16px;padding:14px 16px;background:var(--bg);cursor:pointer;font-family:inherit;color:var(--text);transition:border-color .15s,background .15s;box-shadow:0 2px 10px var(--sh)}
+.plan-card:active{transform:scale(.985)}
+.plan-card:focus{outline:2px solid rgba(109,133,118,.45);outline-offset:2px}
+.plan-card.is-selected{border-color:var(--green-deep);background:var(--bubble);box-shadow:0 4px 16px rgba(109,133,118,.15)}
+.plan-card-name{display:block;font-size:.9375rem;font-weight:600;color:var(--green-deep)}
+.plan-card-meta{display:block;font-size:.875rem;color:var(--text);line-height:1.5;margin-top:6px;font-weight:500}
+.btn-plan-primary{width:100%;padding:13px;border:none;border-radius:14px;background:var(--green);color:#fff;font-family:inherit;font-weight:600;font-size:.9375rem;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 14px rgba(109,133,118,.35)}
+.btn-plan-primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn-plan-outline{width:100%;padding:12px;border-radius:14px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer}
 #main-app{display:none;flex-direction:column;flex:1;min-height:0}
 #main-app.is-visible{display:flex}
 </style>
@@ -100,6 +116,22 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     <div class="auth-field"><label for="upd-pass1">新しいパスワード</label><div class="auth-pass-wrap"><input id="upd-pass1" class="auth-pass-field" type="text" autocomplete="new-password" /><button type="button" class="auth-pass-eye" id="upd-eye1" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
     <div class="auth-field"><label for="upd-pass2">パスワード確認</label><div class="auth-pass-wrap"><input id="upd-pass2" class="auth-pass-field" type="text" autocomplete="new-password" /><button type="button" class="auth-pass-eye" id="upd-eye2" aria-label="パスワードを隠す" aria-pressed="true">👁</button></div></div>
     <div class="auth-actions"><button type="button" class="btn-auth-primary" id="upd-submit">パスワードを更新する</button></div>
+  </div>
+</div>
+
+<div id="plan-modal" class="plan-modal-overlay auth-hide" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
+  <div class="plan-modal-window">
+    <p class="plan-modal-title" id="plan-modal-title">プランをお選びください</p>
+    <p class="plan-modal-lead">有料プランでご利用開始いただくか、無料トライアルでお試しいただけます。</p>
+    <p id="plan-modal-err" class="plan-modal-err" role="alert"></p>
+    <div class="plan-cards" id="plan-cards">
+      <button type="button" class="plan-card" data-plan="light_monthly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">月額800円</span></button>
+      <button type="button" class="plan-card" data-plan="light_yearly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">年額6,400円（月あたり約720円・10%OFF）</span></button>
+      <button type="button" class="plan-card" data-plan="standard_monthly" aria-pressed="false"><span class="plan-card-name">スタンダードプラン</span><span class="plan-card-meta">月額1,980円</span></button>
+      <button type="button" class="plan-card" data-plan="standard_yearly" aria-pressed="false"><span class="plan-card-name">スタンダードプラン</span><span class="plan-card-meta">年額15,840円（月あたり約1,782円・10%OFF）</span></button>
+    </div>
+    <button type="button" class="btn-plan-primary" id="plan-confirm-btn" disabled>このプランで始める</button>
+    <button type="button" class="btn-plan-outline" id="plan-free-trial-btn">無料トライアルで始める</button>
   </div>
 </div>
 
@@ -158,6 +190,11 @@ var updSubmit=document.getElementById("upd-submit");
 var updErr=document.getElementById("upd-err");
 var updSucc=document.getElementById("upd-success");
 var btnLogout=document.getElementById("btn-logout");
+var planModal=document.getElementById("plan-modal");
+var planModalErr=document.getElementById("plan-modal-err");
+var planCardsWrap=document.getElementById("plan-cards");
+var planConfirmBtn=document.getElementById("plan-confirm-btn");
+var planFreeTrialBtn=document.getElementById("plan-free-trial-btn");
 
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 
@@ -184,13 +221,66 @@ function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)ret
 function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();if(t)h.Authorization="Bearer "+t;return h}
 
 var stripeCheckoutBusy=false;
+var selectedPlanKey=null;
+
+function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("auth-hide");planModal.setAttribute("aria-hidden","true");selectedPlanKey=null;if(planConfirmBtn)planConfirmBtn.disabled=true;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){c.classList.remove("is-selected");c.setAttribute("aria-pressed","false")})}if(planModalErr){planModalErr.textContent="";planModalErr.classList.remove("is-visible")}}
+function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t||"";planModalErr.classList.toggle("is-visible",!!t)}
+function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}}
+function startFreeTrialAndChat(){closePlanChoiceModal();showChatView();logEl.innerHTML="";apiMsgs=[];initFromServer()}
+
 function parsePlanQuery(){try{var raw=window.location.search||"",sp=new URLSearchParams(raw.charAt(0)==="?"?raw.slice(1):raw),p=(sp.get("plan")||"").trim().toLowerCase();if(p==="light_monthly"||p==="light_yearly"||p==="standard_monthly"||p==="standard_yearly")return p}catch(e){}return null}
-function stripeCheckoutRedirect(planKey){if(!planKey)return Promise.reject(new Error("プランが指定されていません"));var tok=getTok();if(!tok){showAuthView();syncAuthUi();return Promise.reject(new Error("ログインが必要です"))}if(stripeCheckoutBusy)return Promise.resolve();stripeCheckoutBusy=true;return fetch(resolveApi("api/checkout"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({plan:planKey}),credentials:"same-origin"}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j}})}).then(function(x){stripeCheckoutBusy=false;if(x.res.status===401){clearSessionAll();showAuthView();syncAuthUi();throw new Error((x.j&&x.j.error)||"セッションの確認に失敗しました。ログインし直してください。")}if(!x.res.ok)throw new Error((x.j&&x.j.error)||("HTTP "+x.res.status));var u=x.j&&x.j.url;if(!u)throw new Error("お支払いページのURLを取得できませんでした");window.location.href=u}).catch(function(e){stripeCheckoutBusy=false;logErr("[stripe checkout]",e);showAuthView();syncAuthUi();return Promise.reject(e)})}
+function stripeCheckoutRedirect(planKey,opt){
+  opt=opt||{};
+  if(!planKey)return Promise.reject(new Error("プランが指定されていません"));
+  var tok=getTok();
+  if(!tok){closePlanChoiceModal();showAuthView();syncAuthUi();return Promise.reject(new Error("ログインが必要です"))}
+  if(stripeCheckoutBusy)return Promise.resolve();
+  stripeCheckoutBusy=true;
+  return fetch(resolveApi("api/checkout"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({plan:planKey}),credentials:"same-origin"})
+    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})})
+    .then(function(x){
+      stripeCheckoutBusy=false;
+      var preferModal=!planModal.classList.contains("auth-hide")&&!!opt.failInModal;
+      if(x.res.status===401){
+        clearSessionAll();
+        closePlanChoiceModal();
+        showAuthView();
+        syncAuthUi();
+        var m401=(x.j&&x.j.error)||"セッションの確認に失敗しました。ログインし直してください。";
+        authErrShow(m401);
+        throw new Error(m401);
+      }
+      if(!x.res.ok){
+        var mb=(x.j&&x.j.error)||("HTTP "+x.res.status);
+        if(preferModal)planModalStripeErr(mb);
+        else{closePlanChoiceModal();showAuthView();syncAuthUi();authErrShow(mb);}
+        throw new Error(mb);
+      }
+      var u=x.j&&x.j.url;if(!u){
+        var mz="お支払いページのURLを取得できませんでした";
+        if(preferModal)planModalStripeErr(mz);
+        else{closePlanChoiceModal();showAuthView();syncAuthUi();authErrShow(mz);}
+        throw new Error(mz);
+      }
+      window.location.href=u;
+      return null;
+    })
+    .catch(function(e){
+      stripeCheckoutBusy=false;
+      logErr("[stripe checkout]",e);
+      var preferModal=!planModal.classList.contains("auth-hide")&&!!opt.failInModal;
+      if(preferModal){
+        var cur=(planModalErr&&planModalErr.textContent)||"";if(!cur)planModalStripeErr(e&&e.message?e.message:"お支払い画面へ進めませんでした");
+      }else{closePlanChoiceModal();showAuthView();syncAuthUi();authErrShow(e&&e.message?e.message:"お支払い画面へ進めませんでした");}
+      return Promise.reject(e);
+    });
+}
 
 function remain(){return remainCount}
 function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の会話回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
 
 function showAuthView(){
+  closePlanChoiceModal();
   authScreen.classList.remove("is-hidden");
   mainApp.classList.remove("is-visible");
   stopAud();
@@ -271,11 +361,7 @@ fetch(resolveApi("api/auth"),{method:"POST",headers:{"Content-Type":"application
     if(typeof x.j.limit==="number")LIM=x.j.limit;
     if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
     authPass.value="";
-    var pkCheckout=parsePlanQuery();
-    if(pkCheckout)return stripeCheckoutRedirect(pkCheckout);
-    showChatView();
-    logEl.innerHTML="";apiMsgs=[];
-    initFromServer();
+    openPlanChoiceModal(parsePlanQuery());
   })
   .catch(function(e){authErrShow(e&&e.message?e.message:"通信エラーです")})
   .finally(function(){authSubmit.disabled=false});
@@ -291,6 +377,9 @@ authBackLogin.addEventListener("click",function(){resetMode=false;syncAuthUi();a
 authPassEye.addEventListener("click",function(){passVisible=!passVisible;applyPassVisibility()});
 authSubmit.addEventListener("click",submitAuth);
 btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM)});
+planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
+planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
+planFreeTrialBtn.addEventListener("click",function(){planModalStripeErr("");startFreeTrialAndChat()});
 
 function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
@@ -341,7 +430,7 @@ function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/
 function stopR(){if(!reco)return;try{reco.stop()}catch(err){}}
 bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if(recOn)stopR();else startR()})}
 
-var recParse=parseRecoveryFromUrl();if(recParse){enterRecoveryPasswordFlow(recParse)}else{recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){stripeCheckoutRedirect(lp).catch(function(e){authErrShow(e&&e.message?e.message:"お支払い画面へ進めませんでした")})}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}}
+var recParse=parseRecoveryFromUrl();if(recParse){enterRecoveryPasswordFlow(recParse)}else{recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){showAuthView();syncAuthUi();openPlanChoiceModal(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}}
 ["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});
 })();
 </script>
