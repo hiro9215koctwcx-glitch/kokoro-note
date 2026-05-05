@@ -187,6 +187,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <div class="toolbar-start">
 <div class="toolbar-btns">
 <button type="button" class="btn-icon tts-on" id="btn-tts" aria-pressed="true">読み上げ ON</button>
+<button type="button" class="btn-icon auth-hide" id="btn-tts-stop" aria-label="読み上げを停止">⏹ 停止</button>
 <button type="button" class="btn-icon mic" id="btn-mic" aria-label="音声入力">🎤</button>
 </div>
 <div id="voice-hints" class="voice-hints-note" role="note" aria-label="音声機能の説明">
@@ -216,6 +217,8 @@ var SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecogniti
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micHintTimer=null,micOk=!!SpeechRecognitionCtor;
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
 var IOS_AUDIO_UNLOCK_KEY="kokoro_ios_audio_unlock_v1";
+var audioUnlocked=false;
+var SILENT_MP3="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAABAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD/";
 var typewriterBusy=false;var typewriterState=null;
 var suppressMrTranscript=false,whisperSending=false,mrStream=null,mrRecorder=null,mrChunks=[],mrMime="",micFallbackInput=null;
 var VOICE_HINTS_LS_KEY="kokoro_voice_hints_seen",voiceHintsPersistRegistered=false;
@@ -253,7 +256,7 @@ var planCardsWrap=document.getElementById("plan-cards");
 var planConfirmBtn=document.getElementById("plan-confirm-btn");
 var planFreeTrialBtn=document.getElementById("plan-free-trial-btn");
 
-var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
+var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),bTtsStop=document.getElementById("btn-tts-stop"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 var iosUnlockBar=document.getElementById("ios-audio-unlock-bar"),btnIosAudioUnlock=document.getElementById("btn-ios-audio-unlock");
 
 function isAppleTouchDevice(){return /iPhone|iPad|iPod/.test(navigator.userAgent||"")||navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1}
@@ -494,6 +497,7 @@ function showChatView(){
   syncPlanPortalButtonVisibility();
   syncVoiceHintsPanel();
   syncMicUsageHint();
+  audioUnlocked=readIosAudioUnlocked();
   syncIosAudioUnlockBar();
 }
 
@@ -524,9 +528,9 @@ function scrollBot(){requestAnimationFrame(function(){logEl.scrollTop=logEl.scro
 function escapeHtml(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function formatAiBubbleHtml(raw){var s=escapeHtml(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"<strong>$1</strong>");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1<em>$2</em>");s=s.replace(/\n/g,"<br>");return s}
 function readIosAudioUnlocked(){try{return sessionStorage.getItem(IOS_AUDIO_UNLOCK_KEY)==="1"}catch(e){return false}}
-function setIosAudioUnlocked(){try{sessionStorage.setItem(IOS_AUDIO_UNLOCK_KEY,"1")}catch(e){}}
-function syncIosAudioUnlockBar(){if(!iosUnlockBar)return;if(!isIOS||readIosAudioUnlocked()){iosUnlockBar.classList.add("auth-hide");return}iosUnlockBar.classList.remove("auth-hide")}
-function tryUnlockIosAudioGesture(){primeAudioPlayback();var unlockAudio=new Audio();var p=unlockAudio.play();if(p&&p.catch)p.catch(function(){unlockAudio.src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";unlockAudio.play().catch(function(){})})}
+function setIosAudioUnlocked(){audioUnlocked=true;try{sessionStorage.setItem(IOS_AUDIO_UNLOCK_KEY,"1")}catch(e){}}
+function syncIosAudioUnlockBar(){if(!iosUnlockBar)return;if(!isIOS||audioUnlocked){iosUnlockBar.classList.add("auth-hide");return}iosUnlockBar.classList.remove("auth-hide")}
+function tryUnlockIosAudioGesture(){primeAudioPlayback();var unlockAudio=new Audio(SILENT_MP3);unlockAudio.play().catch(function(e){console.error("再生エラー",e)})}
 function markdownToPlainForTypewriter(raw){var s=String(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"$1");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1$2");s=s.replace(/^#{1,6}\s?/gm,"");s=s.replace(/```[\s\S]*?```/g,function(m){return m.replace(/^```[^\n]*\n?|\n?```$/g,"")});s=s.replace(/`([^`]*)`/g,"$1");return s}
 function lockTypewriterComposer(){typewriterBusy=true;if(bSend)bSend.disabled=true}
 function releaseTypewriterAfterTypewriterDone(){typewriterBusy=false;typewriterState=null;updRallyRemain(remainCount)}
@@ -534,7 +538,9 @@ function finalizeTypewriterIfNeeded(){var st=typewriterState;if(!st)return;if(st
 function addAiBubbleTypewriter(fullRaw,onDone){var row=document.createElement("div");row.className="row ai";var b=document.createElement("div");b.className="bubble";row.appendChild(b);logEl.appendChild(row);scrollBot();var plain=markdownToPlainForTypewriter(fullRaw);lockTypewriterComposer();var st={bubble:b,fullRaw:fullRaw,row:row,timer:null};typewriterState=st;function finish(){if(typewriterState!==st)return;try{b.innerHTML=formatAiBubbleHtml(fullRaw)}catch(e){}releaseTypewriterAfterTypewriterDone();scrollBot();if(onDone)onDone(row)}if(!plain.length){finish();return}var idx=0;function tick(){if(typewriterState!==st)return;idx++;if(idx>plain.length){finish();return}b.innerHTML=escapeHtml(plain.slice(0,idx)).replace(/\n/g,"<br>");scrollBot();st.timer=setTimeout(tick,32+Math.floor(Math.random()*9))}st.timer=setTimeout(tick,0)}
 function stripMarkdownForSpeech(raw){var s=String(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"$1");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1$2");return s.replace(/\*+/g," ").replace(/\s+/g," ").trim()}
 function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");if(!err&&role==="ai"){b.innerHTML=formatAiBubbleHtml(text)}else{b.textContent=text}row.appendChild(b);logEl.appendChild(row);scrollBot();return row}
-function stopAud(){try{if(aud){aud.pause();try{aud.currentTime=0}catch(e){};aud.src=""}}catch(e){}aud=null}
+function hidePcTtsStopBtn(){if(bTtsStop)bTtsStop.classList.add("auth-hide")}
+function showPcTtsStopBtn(){if(bTtsStop)bTtsStop.classList.remove("auth-hide")}
+function stopAud(){hidePcTtsStopBtn();try{if(aud){aud.pause();try{aud.currentTime=0}catch(e){};aud.src=""}}catch(e){}aud=null}
 var ttsPrimed=false;
 function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var ctx=new AC();var resume=ctx.resume&&ctx.resume.bind(ctx);if(resume){resume().catch(function(){})}var osc=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=0;osc.connect(gain);gain.connect(ctx.destination);osc.start(0);osc.stop(ctx.currentTime+0.02)}}catch(e){logErr("[TTS prime]",e)}finally{ttsPrimed=true}}
 
@@ -579,8 +585,8 @@ function attachIosTtsListenButton(aiMsgRow,text){
   playBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(playBtn.disabled)return;primeAudioPlayback();playBtn.disabled=true;playBtn.textContent="🔊 音声を準備中...";playAssistantTTS(text,iosUi)},false);
   stopBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(typeof iosUi.abortPlayback==="function"){try{iosUi.abortPlayback()}catch(eAb){}iosUi.abortPlayback=null}try{if(aud){aud.pause();try{aud.currentTime=0}catch(eT){};aud.src=""}}catch(eA){}aud=null;stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)},false);
 }
-function refreshIosTtsOffersFromHistory(){if(!isIOS||readIosAudioUnlocked())return;removeIosTtsOfferRows();if(!ttsOn)return;var px=peekLastAssistantText();var tgt=resolveLastAiBubbleRow();if(px&&tgt)attachIosTtsListenButton(tgt,px)}
-function scheduleAssistantTts(text,optAiRow){if(!ttsOn||!text)return;if(isIOS&&!readIosAudioUnlocked()){var tgt=null;if(optAiRow&&optAiRow.classList&&optAiRow.classList.contains("ai"))tgt=optAiRow;if(!tgt)tgt=resolveLastAiBubbleRow();if(tgt)attachIosTtsListenButton(tgt,text);return}playAssistantTTS(text)}
+function refreshIosTtsOffersFromHistory(){if(!isIOS||audioUnlocked)return;removeIosTtsOfferRows();if(!ttsOn)return;var px=peekLastAssistantText();var tgt=resolveLastAiBubbleRow();if(px&&tgt)attachIosTtsListenButton(tgt,px)}
+function scheduleAssistantTts(text,optAiRow){if(!ttsOn||!text)return;if(isIOS&&!audioUnlocked){var tgt=null;if(optAiRow&&optAiRow.classList&&optAiRow.classList.contains("ai"))tgt=optAiRow;if(!tgt)tgt=resolveLastAiBubbleRow();if(tgt)attachIosTtsListenButton(tgt,text);return}playAssistantTTS(text)}
 function playAssistantTTS(t,iosUi){
   if(!ttsOn||!t)return;
   var url=resolveApi("api/tts");
@@ -600,25 +606,37 @@ function playAssistantTTS(t,iosUi){
         });
       }
       if(!x.blob||x.blob.size===0)throw new Error("音声データが空です");
-      return x.blob;
+      return new Promise(function(ok,reject){
+        var fr=new FileReader();
+        fr.onloadend=function(){
+          var d=fr.result;
+          if(typeof d!=="string"){reject(new Error("音声の読み取りに失敗しました"));return}
+          var ix=d.indexOf(",");
+          var b64=ix>=0?d.slice(ix+1):"";
+          if(!b64){reject(new Error("音声データが空です"));return}
+          ok(b64);
+        };
+        fr.onerror=function(){reject(new Error("音声の読み取りに失敗しました"))};
+        fr.readAsDataURL(x.blob);
+      });
     })
-    .then(function(blob){
-      var u=URL.createObjectURL(blob);
-      var a=new Audio();
-      a.src=u;
+    .then(function(b64){
+      var a=new Audio("data:audio/mp3;base64,"+b64);
       aud=a;
+      var showPcStop=!iosUi&&!isIOS;
+      if(showPcStop)showPcTtsStopBtn();
       if(iosUi){
         iosUi.playBtn.classList.add("auth-hide");
         iosUi.stopBtn.classList.remove("auth-hide");
       }
       var cleanup=function(){
-        try{URL.revokeObjectURL(u)}catch(e){}
         a.removeEventListener("ended",onEnded);
         a.removeEventListener("error",onErr);
       };
       var onEnded=function(){
         cleanup();
         aud=null;
+        hidePcTtsStopBtn();
         if(iosUi){
           try{iosUi.abortPlayback=null}catch(eN){}
           iosUi.stopBtn.classList.add("auth-hide");
@@ -628,6 +646,7 @@ function playAssistantTTS(t,iosUi){
       var onErr=function(){
         cleanup();
         aud=null;
+        hidePcTtsStopBtn();
         logErr("[TTS 要素エラー]",a.error||"Audio error");
         if(iosUi){
           iosUi.abortPlayback=null;
@@ -648,12 +667,15 @@ function playAssistantTTS(t,iosUi){
         try{if(iosUi&&typeof iosUi.abortPlayback==="function")iosUi.abortPlayback=null}catch(z){}
         cleanup();
         aud=null;
+        hidePcTtsStopBtn();
+        console.error("再生エラー",playErr);
         if(iosUi)restoreIosTtsPlayIdle(iosUi);
         throw playErr||new Error("再生がブロックされました（ブラウザの自動再生制限の可能性）");
       });
     })
     .catch(function(err){
       logErr("[TTS] "+url,err);
+      hidePcTtsStopBtn();
       if(iosUi){
         try{iosUi.abortPlayback=null}catch(y){}
         restoreIosTtsPlayIdle(iosUi);
@@ -799,6 +821,7 @@ inp.addEventListener("keydown",function(ev){if(ev.key!=="Enter"||ev.shiftKey){la
 bSend.addEventListener("click",function(){if(remain()>0&&!sending&&!typewriterBusy)send()});
 
 bTts.addEventListener("click",function(){ttsOn=!ttsOn;bTts.setAttribute("aria-pressed",ttsOn?"true":"false");if(ttsOn){primeAudioPlayback();bTts.classList.add("tts-on");bTts.textContent="読み上げ ON";refreshIosTtsOffersFromHistory()}else{bTts.classList.remove("tts-on");bTts.textContent="読み上げ OFF";stopAud();removeIosTtsOfferRows()}});
+if(bTtsStop)bTtsStop.addEventListener("click",function(){stopAud()});
 
 if(useWhisperMic){
 bMic.title="録音開始／停止（音声を文字にします）";
