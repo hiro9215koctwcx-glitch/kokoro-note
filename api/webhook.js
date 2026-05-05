@@ -179,23 +179,16 @@ async function handler(req, res) {
     );
   }
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed":
+  switch (event.type) {
+    case "checkout.session.completed":
+      try {
         await handleCheckoutSessionCompleted(event.data.object);
-        break;
-      default:
-        break;
-    }
-  } catch (e) {
-    console.error("[webhook] handler error", event.type, e);
-    res.statusCode = 500;
-    return res.end(
-      JSON.stringify({
-        error:
-          e instanceof Error ? e.message : "処理中にエラーが発生しました。",
-      })
-    );
+      } catch (e) {
+        console.error("[webhook] checkout.session.completed 処理エラー", e);
+      }
+      break;
+    default:
+      break;
   }
 
   res.statusCode = 200;
