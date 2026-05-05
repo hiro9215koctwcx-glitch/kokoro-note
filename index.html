@@ -170,7 +170,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <label class="sr-only" for="message-input">メッセージ入力</label>
 <textarea id="message-input" rows="5" placeholder="気持ちを書いてみましょう" autocomplete="off"></textarea>
 <button type="button" class="btn-send" id="btn-send">送信</button>
-</div><p class="hint">Enter で改行 · Enter を続けて2回で送信</p></div></div>
+</div><p class="hint" id="composer-hint">Enter で改行 · Enter を続けて2回で送信</p></div></div>
 </div>
 
 <script>
@@ -184,7 +184,9 @@ var registerMode=false,resetMode=false,passVisible=true,passVisibleUpd1=true,pas
 var recoveryAccessToken=null,recoveryRefreshToken=null,recoveryCode=null,updReturnTimer=null;
 var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログインして始められます。";
 var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再設定用のリンクをお送りします。";
-var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micOk=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+var SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
+var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micHintTimer=null,micOk=!!SpeechRecognitionCtor;
+var suppressMrTranscript=false,whisperSending=false,mrStream=null,mrRecorder=null,mrChunks=[],mrMime="",micFallbackInput=null;
 
 var authScreen=document.getElementById("auth-screen");
 var authLoginCard=document.getElementById("auth-login-card");
@@ -220,6 +222,29 @@ var planFreeTrialBtn=document.getElementById("plan-free-trial-btn");
 
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 
+function isAppleTouchDevice(){return /iPhone|iPad|iPod/.test(navigator.userAgent||"")||navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1}
+var useWhisperMic=isAppleTouchDevice()||!micOk;
+
+function syncMicButtonEnabled(){if(!bMic)return;if(remainCount<=0)return;if(sending){bMic.disabled=true;return}if(useWhisperMic&&whisperSending){bMic.disabled=true;return}bMic.disabled=useWhisperMic?false:!micOk}
+
+function cleanupMicTracks(){if(!mrStream)return;var ms=mrStream;mrStream=null;try{ms.getTracks().forEach(function(t){t.stop()})}catch(err){}}
+function pickRecordingMime(){var cand=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/mp4;codecs=mp4a.40.2","audio/mp3"];var i;for(i=0;i<cand.length;i++){try{if(typeof MediaRecorder!=="undefined"&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(cand[i]))return cand[i]}catch(e){}}return""}
+var COMPOSER_HINT_DEFAULT="Enter で改行 · Enter を続けて2回で送信";
+function showMicComposerHint(txt){var el=document.getElementById("composer-hint");if(!el)return;if(micHintTimer){clearTimeout(micHintTimer);micHintTimer=null}txt=(txt&&String(txt).trim())||"";if(!txt){el.textContent=COMPOSER_HINT_DEFAULT;el.style.removeProperty("color");return}el.textContent=txt;el.style.color="#a04444";micHintTimer=setTimeout(function(){micHintTimer=null;el.textContent=COMPOSER_HINT_DEFAULT;el.style.removeProperty("color")},4000)}
+function appendTranscriptToInput(t){t=(typeof t==="string"?t.trim():"");if(!t)return;var cur=(inp.value||"").replace(/\s+$/,"");inp.value=(cur?cur+" ":"")+t;try{inp.dispatchEvent(new Event("input"))}catch(e){}}
+
+function whisperSendPayload(b64,mime){mime=mime&&String(mime).trim()?String(mime).trim():void 0;whisperSending=true;syncMicButtonEnabled();fetch(resolveApi("api/transcribe"),{method:"POST",headers:Object.assign({},chatHeaders(),{"Content-Type":"application/json;charset=UTF-8"}),credentials:"same-origin",body:JSON.stringify({audio_base64:b64,mime:mime||"application/octet-stream"})}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(eParse){}return{res:res,j:j}})}).then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||("エラー "+x.res.status))}var rawText=x.j&&x.j.text;if(typeof rawText!=="string"||!String(rawText).trim())throw new Error("文字起こし結果が取得できませんでした");appendTranscriptToInput(rawText)}).catch(function(e){logErr("[Whisper transcribe]",e);showMicComposerHint(e&&e.message?e.message:"音声の文字起こしに失敗しました")}).finally(function(){whisperSending=false;syncMicButtonEnabled();try{if(remain()>0&&!sending&&!inp.disabled)bSend.disabled=!inp.value.trim()}catch(eIgn){}})}
+
+function blobToWhisper(blob){if(!blob||blob.size<180){syncMicButtonEnabled();showMicComposerHint("音声が短すぎます");return}var reader=new FileReader();reader.onloadend=function(){var d=reader.result;if(typeof d!=="string"){syncMicButtonEnabled();return}var ix=d.indexOf(",");var payload=ix>=0?d.slice(ix+1):d;whisperSendPayload(payload,blob.type||"audio/webm")};reader.onerror=function(){syncMicButtonEnabled();showMicComposerHint("音声の読み取りに失敗しました")};reader.readAsDataURL(blob)}
+function whisperMicStopRecording(){if(mrRecorder&&mrRecorder.state==="recording"){try{mrRecorder.stop()}catch(er){suppressMrTranscript=false;cleanupMicTracks();mrRecorder=null;mrChunks=[];recOn=false;bMic.classList.remove("recording");syncMicButtonEnabled()}}else{cleanupMicTracks();suppressMrTranscript=false;mrRecorder=null;mrChunks=[];recOn=false;bMic.classList.remove("recording");syncMicButtonEnabled()}}
+function whisperMicStartRecording(){if(!getTok()){showMicComposerHint("ログインしてください");return}if(remain()<=0||sending||whisperSending)return;if(typeof navigator.mediaDevices==="undefined"||typeof navigator.mediaDevices.getUserMedia!=="function"){fallbackFileMicPick();return}if(typeof MediaRecorder==="undefined"){fallbackFileMicPick();return}navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(function(stream){cleanupMicTracks();mrStream=stream;mrChunks=[];mrMime=pickRecordingMime();try{mrRecorder=mrMime?new MediaRecorder(stream,{mimeType:mrMime}):new MediaRecorder(stream)}catch(er2){mrRecorder=new MediaRecorder(stream)}if(!mrMime&&mrRecorder.mimeType)mrMime=mrRecorder.mimeType;mrRecorder.ondataavailable=function(ev){if(ev.data&&ev.data.size>0)mrChunks.push(ev.data)};mrRecorder.onerror=function(){suppressMrTranscript=false;cleanupMicTracks();mrRecorder=null;mrChunks=[];recOn=false;bMic.classList.remove("recording");syncMicButtonEnabled();showMicComposerHint("録音でエラーが発生しました")};mrRecorder.onstop=function(){var cancel=suppressMrTranscript;suppressMrTranscript=false;var ch=mrChunks.slice();mrChunks=[];var mimeHold=mrMime||"";cleanupMicTracks();mrRecorder=null;recOn=false;bMic.classList.remove("recording");syncMicButtonEnabled();if(cancel)return;var blob=new Blob(ch,{type:mimeHold||(ch.length&&ch[0].type)||"audio/mp4"});blobToWhisper(blob)};mrRecorder.start(250);recOn=true;bMic.classList.add("recording");syncMicButtonEnabled()}).catch(function(err){logErr("[mic]",err);showMicComposerHint("マイクを使えませんでした");fallbackFileMicPick()})}
+function onWhisperMicButtonClick(){primeAudioPlayback();if(bMic.disabled||remain()<=0||sending)return;if(recOn&&(mrRecorder&&mrRecorder.state==="recording"))whisperMicStopRecording();else whisperMicStartRecording()}
+
+function getMicFallbackInput(){if(micFallbackInput)return micFallbackInput;micFallbackInput=document.createElement("input");micFallbackInput.type="file";micFallbackInput.accept="audio/*,.m4a,.webm,.mp3,.wav";micFallbackInput.className="sr-only";micFallbackInput.setAttribute("tabindex","-1");micFallbackInput.style.position="fixed";micFallbackInput.style.left="-9999px";micFallbackInput.style.width="1px";micFallbackInput.style.height="1px";micFallbackInput.setAttribute("aria-hidden","true");micFallbackInput.setAttribute("capture","user");document.body.appendChild(micFallbackInput);micFallbackInput.addEventListener("change",micFallbackSelected,false);return micFallbackInput}
+
+function micFallbackSelected(ev){var fl=micFallbackInput&&micFallbackInput.files&&micFallbackInput.files[0];if(micFallbackInput)micFallbackInput.value="";if(!fl)return;whisperSending=true;syncMicButtonEnabled();var rd=new FileReader();rd.onloadend=function(){var data=rd.result;if(typeof data!=="string"){whisperSending=false;syncMicButtonEnabled();return}var comma=data.indexOf(",");var rawB64=comma>=0?data.slice(comma+1):data;whisperSendPayload(rawB64,fl.type||"application/octet-stream")};rd.onerror=function(){whisperSending=false;syncMicButtonEnabled();showMicComposerHint("音声ファイルを読み取れませんでした")};rd.readAsDataURL(fl)}
+
+function fallbackFileMicPick(){showMicComposerHint("音声ファイルを選択してください");getMicFallbackInput().click()}
 function resolveApi(rel){try{rel=String(rel||"").replace(/^\/*/,"");var raw=(window.location.pathname||"/").split("?")[0]||"/";if(raw.slice(-1)==="/")return raw+rel;var leaf=raw.slice(raw.lastIndexOf("/")+1);if(leaf.indexOf(".")!==-1){var d=raw.slice(0,raw.lastIndexOf("/")+1);return(d||"/")+rel}return raw+"/"+rel}catch(err){logErr("[API "+rel+"]",err);return"/"+rel}}
 function authResetPasswordUrl(){var b=resolveApi("api/auth");return b.indexOf("?")>=0?b+"&action=resetPassword":b+"?action=resetPassword"}
 function authUpdatePasswordUrl(){var b=resolveApi("api/auth");return b.indexOf("?")>=0?b+"&action=updatePassword":b+"?action=updatePassword"}
@@ -384,7 +409,7 @@ function stripeCheckoutRedirect(planKey,opt){
 }
 
 function remain(){return remainCount}
-function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;bMic.disabled=true;if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.classList.remove("recording");limEl.textContent="本日の上限回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;bMic.disabled=!micOk;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}}
+function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;if(useWhisperMic){suppressMrTranscript=true;if(mrRecorder&&mrRecorder.state==="recording"){try{mrRecorder.stop()}catch(e){}}cleanupMicTracks();mrRecorder=null;mrChunks=[];recOn=false;whisperSending=false}else if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.disabled=true;bMic.classList.remove("recording");limEl.textContent="本日の上限回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;limEl.classList.remove("visible");limEl.textContent="";if(!sending)bSend.disabled=!inp.value.trim()}syncMicButtonEnabled()}
 
 function showAuthView(){
   hideTrialEndedScreen();
@@ -582,13 +607,21 @@ bSend.addEventListener("click",function(){if(remain()>0&&!sending)send()});
 
 bTts.addEventListener("click",function(){ttsOn=!ttsOn;bTts.setAttribute("aria-pressed",ttsOn?"true":"false");if(ttsOn){primeAudioPlayback();bTts.classList.add("tts-on");bTts.textContent="読み上げ ON"}else{bTts.classList.remove("tts-on");bTts.textContent="読み上げ OFF";stopAud()}});
 
-var SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(!micOk){bMic.disabled=true;bMic.title="お使いのブラウザは音声入力に対応していません"}else{
+if(useWhisperMic){
+bMic.title="録音開始／停止（音声を文字にします）";
+bMic.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIgn){};onWhisperMicButtonClick()});
+syncMicButtonEnabled()
+}else if(!SpeechRecognitionCtor){
+bMic.disabled=true;bMic.title="お使いのブラウザは音声入力に対応していません"
+}else{
+bMic.title="音声入力（ブラウザ標準）";
 var voicePrefix="",voiceFinalAcc="";
 function paintVoiceInput(interim){interim=typeof interim==="string"?interim:"";var combo=(voicePrefix||"")+(voiceFinalAcc||"")+(interim||"");if(inp.value!==combo){inp.value=combo}var len=combo.length;try{inp.selectionStart=len;inp.selectionEnd=len}catch(e){}}
-function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/\s+$/,"");voicePrefix=cur?cur+" ":"";voiceFinalAcc="";reco=new SpeechRecognition();reco.lang="ja-JP";reco.interimResults=true;reco.continuous=true;reco.maxAlternatives=1;reco.onresult=function(ev){var i,ch,inter="",fin="";for(i=ev.resultIndex;i<ev.results.length;i++){ch=(ev.results[i]&&ev.results[i][0]&&ev.results[i][0].transcript)||"";if(ev.results[i].isFinal)fin+=ch;else inter+=ch}if(fin)voiceFinalAcc+=fin;paintVoiceInput(inter)};reco.onend=function(){recOn=false;bMic.classList.remove("recording");reco=null;voicePrefix="";voiceFinalAcc="";inp.dispatchEvent(new Event("input"))};reco.onerror=function(){recOn=false;bMic.classList.remove("recording");reco=null;voicePrefix="";voiceFinalAcc="";inp.dispatchEvent(new Event("input"))};try{reco.start();recOn=true;bMic.classList.add("recording")}catch(err){recOn=false;bMic.classList.remove("recording");reco=null}}
+function startR(){if(recOn||remain()<=0)return;var cur=(inp.value||"").replace(/\s+$/,"");voicePrefix=cur?cur+" ":"";voiceFinalAcc="";reco=new SpeechRecognitionCtor();reco.lang="ja-JP";reco.interimResults=true;reco.continuous=true;reco.maxAlternatives=1;reco.onresult=function(ev){var i,ch,inter="",fin="";for(i=ev.resultIndex;i<ev.results.length;i++){ch=(ev.results[i]&&ev.results[i][0]&&ev.results[i][0].transcript)||"";if(ev.results[i].isFinal)fin+=ch;else inter+=ch}if(fin)voiceFinalAcc+=fin;paintVoiceInput(inter)};reco.onend=function(){recOn=false;bMic.classList.remove("recording");reco=null;voicePrefix="";voiceFinalAcc="";inp.dispatchEvent(new Event("input"))};reco.onerror=function(){recOn=false;bMic.classList.remove("recording");reco=null;voicePrefix="";voiceFinalAcc="";inp.dispatchEvent(new Event("input"))};try{reco.start();recOn=true;bMic.classList.add("recording");syncMicButtonEnabled()}catch(err){recOn=false;bMic.classList.remove("recording");reco=null}}
 function stopR(){if(!reco)return;try{reco.stop()}catch(err){}}
-bMic.addEventListener("click",function(){if(bMic.disabled||remain()<=0)return;if(recOn)stopR();else startR()})}
+bMic.addEventListener("click",function(){primeAudioPlayback();if(bMic.disabled||remain()<=0||sending)return;if(recOn)stopR();else startR();syncMicButtonEnabled()});
+syncMicButtonEnabled()
+}
 
 var recParse=parseRecoveryFromUrl();
 if(recParse){
