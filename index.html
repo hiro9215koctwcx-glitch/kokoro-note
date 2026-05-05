@@ -31,7 +31,12 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .bubble em{font-style:italic}
 .composer-area{position:fixed;bottom:0;left:0;right:0;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(250,248,245,0),var(--bg) 18%);border-top:1px solid rgba(143,163,149,.2)}
 .composer-inner{max-width:560px;margin:0 auto}
-.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.toolbar{display:flex;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.toolbar-start{display:flex;flex-direction:column;align-items:flex-start;gap:5px;flex:1;min-width:0}
+.toolbar-btns{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.voice-hints-note{margin:0;padding:0 0 0 1px;max-width:100%;opacity:.9}
+.voice-hints-note p{margin:0;font-size:.75rem;line-height:1.5;color:var(--text-muted)}
+.voice-hints-note p+p{margin-top:2px}
 .btn-icon{min-width:46px;height:46px;padding:0 12px;border-radius:999px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;background:var(--white);color:var(--green-deep);box-shadow:0 2px 12px var(--sh);flex-shrink:0;font-family:inherit;font-size:.75rem;font-weight:500}
 .btn-icon.mic{width:46px;min-width:46px;padding:0;font-size:1.1rem}
 .btn-icon:active{transform:scale(.96)}.btn-icon.tts-on{background:var(--bubble)}
@@ -164,8 +169,16 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <p class="limit-note" id="limit-note" aria-live="assertive"></p>
 <main><div id="chat-log" role="log" aria-label="チャットメッセージ"></div></main>
 <div class="composer-area"><div class="composer-inner"><div class="toolbar">
+<div class="toolbar-start">
+<div class="toolbar-btns">
 <button type="button" class="btn-icon tts-on" id="btn-tts" aria-pressed="true">読み上げ ON</button>
 <button type="button" class="btn-icon mic" id="btn-mic" aria-label="音声入力">🎤</button>
+</div>
+<div id="voice-hints" class="voice-hints-note" role="note" aria-label="音声機能の説明">
+<p>🎤 音声入力：話し終わったら自動で認識します（数秒かかる場合があります）</p>
+<p>🔊 音声返答：高品質な音声生成のため、返答まで数秒かかります</p>
+</div>
+</div>
 </div><div class="input-row">
 <label class="sr-only" for="message-input">メッセージ入力</label>
 <textarea id="message-input" rows="5" placeholder="気持ちを書いてみましょう" autocomplete="off"></textarea>
@@ -187,6 +200,7 @@ var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再
 var SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
 var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micHintTimer=null,micOk=!!SpeechRecognitionCtor;
 var suppressMrTranscript=false,whisperSending=false,mrStream=null,mrRecorder=null,mrChunks=[],mrMime="",micFallbackInput=null;
+var VOICE_HINTS_LS_KEY="kokoro_voice_hints_seen",voiceHintsPersistRegistered=false;
 
 var authScreen=document.getElementById("auth-screen");
 var authLoginCard=document.getElementById("auth-login-card");
@@ -425,12 +439,31 @@ function showAuthView(){
   authUpdateCard.classList.add("auth-hide");
 }
 function syncPlanPortalButtonVisibility(){var btn=document.getElementById("btn-plan-portal");if(!btn)return;var show=false;try{var raw=sessionStorage.getItem(SESS_KEY);if(raw){var oo=JSON.parse(raw);var bp=oo.billingPlan;if(bp!==undefined&&bp!==null){var tt=String(bp).trim().toLowerCase();if(tt)show=(tt==="light"||tt==="standard")}}}catch(ge){console.error("[syncPlanPortalButtonVisibility]",ge)}btn.classList.toggle("auth-hide",!show)}
+function persistVoiceHintsSeen(){try{localStorage.setItem(VOICE_HINTS_LS_KEY,"1")}catch(e){}}
+function registerVoiceHintsSeenOnLeave(){
+  if(voiceHintsPersistRegistered)return;
+  voiceHintsPersistRegistered=true;
+  var go=persistVoiceHintsSeen;
+  window.addEventListener("pagehide",go,{passive:true});
+  window.addEventListener("beforeunload",go);
+  document.addEventListener("visibilitychange",function(){if(document.hidden)go()},{passive:true});
+}
+function syncVoiceHintsPanel(){
+  var el=document.getElementById("voice-hints");
+  if(!el)return;
+  try{
+    if(localStorage.getItem(VOICE_HINTS_LS_KEY)==="1"){el.classList.add("auth-hide");return}
+    el.classList.remove("auth-hide");
+    registerVoiceHintsSeenOnLeave();
+  }catch(err){el.classList.remove("auth-hide");registerVoiceHintsSeenOnLeave()}
+}
 function showChatView(){
   if(readSessionTrialExpired()){showTrialEndedScreen();return}
   hideTrialEndedScreen();
   authScreen.classList.add("is-hidden");
   mainApp.classList.add("is-visible");
   syncPlanPortalButtonVisibility();
+  syncVoiceHintsPanel();
 }
 
 function authErrShow(t){authErr.style.display="block";authErr.textContent=t||""}
