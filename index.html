@@ -68,7 +68,14 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .trial-ended-card{width:100%;max-width:400px;background:var(--white);padding:28px 24px;border-radius:22px;box-shadow:0 12px 40px var(--sh)}
 .trial-ended-title{font-size:1.2rem;font-weight:600;text-align:center;margin:0 0 14px;color:var(--green-deep);letter-spacing:.03em}
 .trial-ended-msg{font-size:.875rem;color:var(--text);line-height:1.65;text-align:center;margin:0 0 26px}
-.trial-ended-actions{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.trial-ended-features{font-size:.8125rem;color:var(--text);line-height:1.55;margin:0 0 16px;text-align:left}
+.trial-ended-features p{margin:0 0 6px;font-weight:600;color:var(--green-deep);font-size:.8125rem}
+.trial-ended-features ul{margin:0;padding-left:1.15em;display:flex;flex-direction:column;gap:4px;color:var(--muted)}
+.trial-ended-plan-row{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.btn-trial-upgrade{width:100%;padding:12px 14px;border:none;border-radius:14px;font-family:inherit;font-weight:600;font-size:.875rem;cursor:pointer;text-align:center;box-shadow:0 4px 14px rgba(109,133,118,.3)}
+.btn-trial-upgrade-light{background:var(--green);color:#fff}
+.btn-trial-upgrade-standard{background:var(--green-deep);color:#fff;box-shadow:0 4px 14px rgba(70,90,75,.35)}
+.btn-trial-more{width:100%;margin-top:4px;padding:10px;border-radius:14px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer}
 .auth-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom));min-height:100dvh}
 .auth-card{width:100%;max-width:400px;background:var(--white);padding:28px 24px;border-radius:22px;box-shadow:0 12px 40px var(--sh)}
 .auth-title{font-size:1.25rem;font-weight:600;text-align:center;margin:0 0 6px;letter-spacing:.04em}
@@ -147,10 +154,19 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 
 <div id="trial-ended-screen" class="trial-ended-screen auth-hide" aria-hidden="true" role="alertdialog" aria-labelledby="trial-ended-heading" aria-modal="true">
   <div class="trial-ended-card">
-    <p class="trial-ended-title" id="trial-ended-heading">トライアル期間が終了しました</p>
-    <p class="trial-ended-msg">7日間のトライアルをご利用いただきありがとうございました。引き続きご利用いただくには、有料プランへのお申し込みが必要です。</p>
-    <div class="trial-ended-actions">
-      <button type="button" class="btn-auth-primary" id="btn-trial-pick-plan">プランを選ぶ</button>
+    <p class="trial-ended-title" id="trial-ended-heading">無料トライアルが終了しました</p>
+    <p class="trial-ended-msg">引き続きご利用いただくには、有料プランへのアップグレードが必要です。</p>
+    <div class="trial-ended-features" role="note">
+      <p>プランの特徴（概要）</p>
+      <ul>
+        <li><strong>ライト</strong>：1日あたりの対話回数がやや多め。日々の気持ちの整理向け。</li>
+        <li><strong>スタンダード</strong>：1日あたりの対話回数がより多く、じっくりご利用向け。</li>
+      </ul>
+    </div>
+    <div class="trial-ended-plan-row">
+      <button type="button" class="btn-trial-upgrade btn-trial-upgrade-light" id="btn-trial-upgrade-light">ライトプラン（¥800／月）に進む</button>
+      <button type="button" class="btn-trial-upgrade btn-trial-upgrade-standard" id="btn-trial-upgrade-standard">スタンダードプラン（¥1,980／月）に進む</button>
+      <button type="button" class="btn-trial-more" id="btn-trial-more-plans">年払い・その他のプランを見る</button>
     </div>
   </div>
 </div>
@@ -265,7 +281,7 @@ function syncMicButtonEnabled(){if(!bMic)return;if(remainCount<=0)return;if(send
 function cleanupMicTracks(){if(!mrStream)return;var ms=mrStream;mrStream=null;try{ms.getTracks().forEach(function(t){t.stop()})}catch(err){}}
 function pickRecordingMime(){var cand=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/mp4;codecs=mp4a.40.2","audio/mp3"];var i;for(i=0;i<cand.length;i++){try{if(typeof MediaRecorder!=="undefined"&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(cand[i]))return cand[i]}catch(e){}}return""}
 var COMPOSER_HINT_DEFAULT="Enter で改行 · Enter を続けて2回で送信";
-function showMicComposerHint(txt){var el=document.getElementById("composer-hint");if(!el)return;if(micHintTimer){clearTimeout(micHintTimer);micHintTimer=null}txt=(txt&&String(txt).trim())||"";if(!txt){el.textContent=COMPOSER_HINT_DEFAULT;el.style.removeProperty("color");return}el.textContent=txt;el.style.color="#a04444";micHintTimer=setTimeout(function(){micHintTimer=null;el.textContent=COMPOSER_HINT_DEFAULT;el.style.removeProperty("color")},4000)}
+function showMicComposerHint(txt){var el=document.getElementById("composer-hint");if(!el)return;if(micHintTimer){clearTimeout(micHintTimer);micHintTimer=null}txt=(txt&&String(txt).trim())||"";if(!txt){el.textContent=COMPOSER_HINT_DEFAULT;el.style.removeProperty("color");return}el.textContent=translateErrorToJa(txt);el.style.color="#a04444";micHintTimer=setTimeout(function(){micHintTimer=null;el.textContent=COMPOSER_HINT_DEFAULT;el.style.removeProperty("color")},4000)}
 function appendTranscriptToInput(t){t=(typeof t==="string"?t.trim():"");if(!t)return;var cur=(inp.value||"").replace(/\s+$/,"");inp.value=(cur?cur+" ":"")+t;try{inp.dispatchEvent(new Event("input"))}catch(e){}}
 
 function whisperSendPayload(b64,mime){mime=mime&&String(mime).trim()?String(mime).trim():void 0;whisperSending=true;syncMicButtonEnabled();fetch(resolveApi("api/transcribe"),{method:"POST",headers:Object.assign({},chatHeaders(),{"Content-Type":"application/json;charset=UTF-8"}),credentials:"same-origin",body:JSON.stringify({audio_base64:b64,mime:mime||"application/octet-stream"})}).then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(eParse){}return{res:res,j:j}})}).then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||("エラー "+x.res.status))}var rawText=x.j&&x.j.text;if(typeof rawText!=="string"||!String(rawText).trim())throw new Error("文字起こし結果が取得できませんでした");appendTranscriptToInput(rawText)}).catch(function(e){logErr("[Whisper transcribe]",e);showMicComposerHint(e&&e.message?e.message:"音声の文字起こしに失敗しました")}).finally(function(){whisperSending=false;syncMicButtonEnabled();try{if(remain()>0&&!sending&&!inp.disabled&&!typewriterBusy)bSend.disabled=!inp.value.trim()}catch(eIgn){}})}
@@ -288,6 +304,44 @@ function updatePasswordViaApi(bodyObj){return fetch(authUpdatePasswordUrl(),{met
 function logErr(scope,err){try{console.error(scope,err&&(err.stack||err.message||err)||err)}catch(e){}}
 window.addEventListener("error",function(ev){try{console.error(ev.message,ev.filename,ev.lineno)}catch(e){}});
 window.addEventListener("unhandledrejection",function(ev){try{console.error("未処理Promise:",ev.reason)}catch(e){}});
+
+function translateErrorToJa(raw){
+  if(raw==null)return "";
+  var s=String(raw).trim();
+  if(!s)return "";
+  if(/[\u3040-\u30ff\u3400-\u9fff]/.test(s))return s;
+  var low=s.toLowerCase();
+  var map=[
+    ["invalid login credentials","メールアドレスまたはパスワードが正しくありません"],
+    ["email not confirmed","メールアドレスの確認が完了していません"],
+    ["user already registered","このメールアドレスはすでに登録されています"],
+    ["password should be at least 6 characters","パスワードは6文字以上で入力してください"],
+    ["auth session missing!","セッションが切れました。再度ログインしてください"],
+    ["auth session missing","セッションが切れました。再度ログインしてください"],
+    ["jwt expired","セッションの有効期限が切れました。再度ログインしてください"],
+    ["invalid jwt","セッションが無効です。再度ログインしてください"],
+    ["session not found","セッションが見つかりません。再度ログインしてください"],
+    ["token expired","セッションの有効期限が切れました。再度ログインしてください"],
+    ["invalid refresh token","セッションが無効です。再度ログインしてください"],
+    ["email rate limit exceeded","メール送信の制限に達しました。しばらくしてからお試しください"],
+    ["signup_disabled","新規登録は現在ご利用いただけません"],
+    ["user_banned","このアカウントは利用できません"],
+    ["over_request_rate_limit","リクエストが多すぎます。しばらくしてからお試しください"],
+    ["network","通信エラーが発生しました。接続を確認してください"],
+    ["fetch","通信に失敗しました。接続を確認してください"],
+    ["failed to fetch","通信に失敗しました。接続を確認してください"],
+    ["method not allowed","この操作は許可されていません"]
+  ];
+  var i,row;
+  for(i=0;i<map.length;i++){
+    row=map[i];
+    if(low===row[0]||low.indexOf(row[0])!==-1)return row[1];
+  }
+  if(/^[a-z\s!.,'":;&?\-0-9_()\\/[\]@#%^*+=]+$/i.test(s)&&/[a-z]/i.test(s)){
+    return "エラーが発生しました。しばらくしてからお試しください。";
+  }
+  return s;
+}
 
 function getTok(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return null;var o=JSON.parse(s);return o.access_token||null}catch(e){return null}}
 function userId(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return null;var o=JSON.parse(s);if(!o.user)return null;return o.user.id||null}catch(e){return null}}
@@ -369,7 +423,7 @@ var selectedPlanKey=null;
 var PLAN_DISPLAY_LABELS={light_monthly:"ライトプラン（月額）",light_yearly:"ライトプラン（年額）",standard_monthly:"スタンダードプラン（月額）",standard_yearly:"スタンダードプラン（年額）"};
 
 function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("auth-hide");planModal.setAttribute("aria-hidden","true");selectedPlanKey=null;if(planConfirmBtn)planConfirmBtn.disabled=true;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){c.classList.remove("is-selected");c.setAttribute("aria-pressed","false")})}if(planModalErr){planModalErr.textContent="";planModalErr.classList.remove("is-visible")}}
-function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t||"";planModalErr.classList.toggle("is-visible",!!t)}
+function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t?translateErrorToJa(t):"";planModalErr.classList.toggle("is-visible",!!t)}
 function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}}
 function startFreeTrialAndChat(){
   function runTrial(){
@@ -464,7 +518,7 @@ function openBillingPortal(){
       var u=x.j&&x.j.url;if(!u)throw new Error("ポータルのURLがありませんでした");
       window.location.href=u;
     })
-    .catch(function(e){console.error("[billing portal]",e&&(e.stack||e.message)||e);alert(e&&e.message?e.message:"プラン管理画面を開けませんでした。")})
+    .catch(function(e){console.error("[billing portal]",e&&(e.stack||e.message)||e);alert(translateErrorToJa(e&&e.message?e.message:"プラン管理画面を開けませんでした。"))})
     .finally(function(){if(btn)btn.disabled=false});
 }
 function stripeCheckoutRedirect(planKey,opt){
@@ -583,14 +637,14 @@ function showChatView(){
   syncMicUsageHint();
 }
 
-function authErrShow(t){authErr.style.display="block";authErr.textContent=t||""}
+function authErrShow(t){authErr.style.display="block";authErr.textContent=translateErrorToJa(t||"")}
 function authErrHide(){authErr.style.display="none";authErr.textContent=""}
 function authSuccessShow(t){authSucc.style.display="block";authSucc.textContent=t||""}
 function authSuccessHide(){authSucc.style.display="none";authSucc.textContent=""}
 
 function parseRecoveryFromUrl(){try{var h=(window.location.hash||"").replace(/^#/,""),qRaw=window.location.search||"",spH=new URLSearchParams(h),spQ=new URLSearchParams(qRaw.charAt(0)==="?"?qRaw.slice(1):qRaw),at=spH.get("access_token")||spQ.get("access_token")||null,rf=spH.get("refresh_token")||spQ.get("refresh_token")||null,co=spQ.get("code")||spH.get("code")||null,tp=String(spH.get("type")||spQ.get("type")||"").trim().toLowerCase();if(!(at||co))return null;console.log("[kokoro auth hash] type:",tp||"(none)","refresh_token:",rf);return{access_token:at,refresh_token:rf,code:co,type:tp||null}}catch(e){return null}}
 function stripAuthFromUrl(){try{var u=new URL(window.location.href);u.hash="";var sp=new URLSearchParams(u.search);["access_token","refresh_token","expires_in","token_type","type","code","state","scope"].forEach(function(k){sp.delete(k)});var qq=sp.toString();u.search=qq?"?"+qq:"";history.replaceState(null,"",u.pathname+u.search+u.hash)}catch(e){}}
-function updErrShow(t){updErr.style.display="block";updErr.textContent=t||""}
+function updErrShow(t){updErr.style.display="block";updErr.textContent=translateErrorToJa(t||"")}
 function updErrHide(){updErr.style.display="none";updErr.textContent=""}
 function updSuccessShow(t){updSucc.style.display="block";updSucc.textContent=t||""}
 function updSuccessHide(){updSucc.style.display="none";updSucc.textContent=""}
@@ -881,7 +935,7 @@ function initFromServer(){
       if(typeof x.j.limit==="number")LIM=x.j.limit;
       addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));if(ttsOn)scheduleAssistantTts(msg,aiRow)});
     })
-    .catch(function(e){logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",(e&&e.message)?e.message:fb,true)})
+    .catch(function(e){logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",translateErrorToJa((e&&e.message)?e.message:fb),true)})
     .finally(function(){sending=false;updRallyRemain(remainCount);if(!typewriterBusy)try{inp.focus()}catch(z){}});
 }
 
@@ -938,8 +992,12 @@ btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl
 planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
 planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
 planFreeTrialBtn.addEventListener("click",function(){planModalStripeErr("");startFreeTrialAndChat()});
-var btnTrialPickPlan=document.getElementById("btn-trial-pick-plan");
-if(btnTrialPickPlan)btnTrialPickPlan.addEventListener("click",function(){openPlanChoiceModal(parsePlanQuery())});
+var btnTrialUpgradeLight=document.getElementById("btn-trial-upgrade-light");
+var btnTrialUpgradeStandard=document.getElementById("btn-trial-upgrade-standard");
+var btnTrialMorePlans=document.getElementById("btn-trial-more-plans");
+if(btnTrialUpgradeLight)btnTrialUpgradeLight.addEventListener("click",function(){stripeCheckoutRedirect("light_monthly",{}).catch(function(){})});
+if(btnTrialUpgradeStandard)btnTrialUpgradeStandard.addEventListener("click",function(){stripeCheckoutRedirect("standard_monthly",{}).catch(function(){})});
+if(btnTrialMorePlans)btnTrialMorePlans.addEventListener("click",function(){openPlanChoiceModal(parsePlanQuery())});
 
 function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
@@ -983,7 +1041,7 @@ function send(){
       if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}
       var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRow)});
     })
-    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",m,true);if(e&&e._status===429)updRallyRemain(0)})
+    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",translateErrorToJa(m),true);if(e&&e._status===429)updRallyRemain(0)})
     .finally(function(){sending=false;updRallyRemain(remainCount)});
 }
 

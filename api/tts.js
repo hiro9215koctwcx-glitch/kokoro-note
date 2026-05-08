@@ -23,7 +23,7 @@ async function handler(req, res) {
   if (req.method !== "POST") {
     res.statusCode = 405;
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    return res.end(JSON.stringify({ error: "Method not allowed" }));
+    return res.end(JSON.stringify({ error: "この操作は許可されていません。" }));
   }
 
   const apiKey = process.env.OPENAI_API_KEY;

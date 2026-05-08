@@ -149,6 +149,22 @@ export function computeTrialExpired(planNorm, trialStartRaw) {
 }
 
 async function fetchUserPlanTrialFromUsers(sb, userId) {
+  let metaTrialYmd = null;
+  try {
+    const { data: aud, error: aerr } = await sb.auth.getUser();
+    if (!aerr && aud?.user?.user_metadata) {
+      const m = aud.user.user_metadata;
+      if (typeof m.trial_start_ymd === "string" && m.trial_start_ymd.trim()) {
+        metaTrialYmd = trialStartDateToYmd(m.trial_start_ymd.trim());
+      }
+      if (!metaTrialYmd && typeof m.trial_start_date === "string") {
+        metaTrialYmd = trialStartDateToYmd(m.trial_start_date);
+      }
+    }
+  } catch (e) {
+    console.warn("[memory] fetchUserPlanTrialFromUsers getUser:", e);
+  }
+
   const { data, error } = await sb
     .from("users")
     .select("plan, trial_start_date")
@@ -161,7 +177,9 @@ async function fetchUserPlanTrialFromUsers(sb, userId) {
   }
 
   const planNorm = normalizePlanColumn(data?.plan);
-  const trial_expired = computeTrialExpired(planNorm, data?.trial_start_date);
+  const dbStart = data?.trial_start_date;
+  const trialStartForExpiry = metaTrialYmd || dbStart;
+  const trial_expired = computeTrialExpired(planNorm, trialStartForExpiry);
   return { planNorm, trial_expired };
 }
 

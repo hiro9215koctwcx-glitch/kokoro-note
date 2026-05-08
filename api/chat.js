@@ -168,7 +168,7 @@ async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return json(res, 405, { error: "Method not allowed" });
+    return json(res, 405, { error: "この操作は許可されていません。" });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

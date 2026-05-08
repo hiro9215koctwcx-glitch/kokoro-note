@@ -18,6 +18,7 @@ import {
   getDailyRemaining,
   jstDateParts,
   RALLY_DAILY_LIMIT,
+  trialStartDateToYmd,
 } from "./memory.js";
 
 function setCors(res) {
@@ -187,7 +188,7 @@ async function handler(req, res) {
 
   if (req.method !== "POST") {
     res.statusCode = 405;
-    return res.end(JSON.stringify({ error: "Method not allowed" }));
+    return res.end(JSON.stringify({ error: "この操作は許可されていません。" }));
   }
 
   let body = {};
@@ -470,10 +471,19 @@ async function handler(req, res) {
         }
       }
 
+      const { data: rowTrial } = await sbUser
+        .from("users")
+        .select("trial_start_date")
+        .eq("id", user.id)
+        .maybeSingle();
+      const trialMetaYmd =
+        trialStartDateToYmd(rowTrial?.trial_start_date) || todayYmd;
+
       try {
         await mergeUserMetadataAdmin(user.id, {
           plan_selected: true,
           plan: "無料トライアル",
+          trial_start_ymd: trialMetaYmd,
         });
       } catch (metaErr) {
         console.error("[auth startTrial] user metadata:", metaErr);
