@@ -205,10 +205,9 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 (function(){
 "use strict";
 var SESS_KEY="kokoro_session";
-var AUTH_EXPIRY_KEY="kokoro_auth_expires_at";
-var AUTH_EXPIRY_MS=30*24*60*60*1000;
 var SB_STORAGE_KEY="kokoro-note-session";
 var supabaseClient=null;
+var kokoroAuthInitPromise=null;
 var MSG_SNAP="kokoro_msgs_v1";
 var LIM=5,DBL=700;
 var remainCount=LIM;
@@ -297,24 +296,11 @@ function patchSession(partial){try{var raw=localStorage.getItem(SESS_KEY);if(!ra
 function clearSessionAll(){
   try{sessionStorage.removeItem(MSG_SNAP)}catch(e){}
   try{localStorage.removeItem(SESS_KEY)}catch(e){}
-  try{localStorage.removeItem(AUTH_EXPIRY_KEY)}catch(e){}
   if(supabaseClient){supabaseClient.auth.signOut({scope:"global"}).catch(function(e){console.error("[signOut]",e)})}
   else{try{localStorage.removeItem(SB_STORAGE_KEY)}catch(e2){}}
 }
 function readSessionTrialExpired(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return false;var o=JSON.parse(s);return o.trialExpired===true}catch(e){return false}}
-function setAuthExpiryNow(){try{localStorage.setItem(AUTH_EXPIRY_KEY,String(Date.now()+AUTH_EXPIRY_MS))}catch(e){}}
 function migrateSessionStorageToLocalStorage(){try{var o=sessionStorage.getItem(SESS_KEY);if(o&&!localStorage.getItem(SESS_KEY)){localStorage.setItem(SESS_KEY,o);sessionStorage.removeItem(SESS_KEY)}}catch(e){}}
-function clearExpiredAuthKeys(){
-  try{
-    var x=localStorage.getItem(AUTH_EXPIRY_KEY);
-    if(!x)return false;
-    if(Date.now()<=parseInt(x,10))return false;
-    localStorage.removeItem(AUTH_EXPIRY_KEY);
-    localStorage.removeItem(SESS_KEY);
-    localStorage.removeItem(SB_STORAGE_KEY);
-    return true;
-  }catch(e){return false}
-}
 function mergeAppSessionFromSupabase(sess){
   var prev={};
   try{var raw=localStorage.getItem(SESS_KEY);if(raw)prev=JSON.parse(raw)}catch(e){}
@@ -330,9 +316,13 @@ function persistSupabaseSession(access_token,refresh_token){
   if(!supabaseClient||!access_token)return Promise.resolve();
   return supabaseClient.auth.setSession({access_token:access_token,refresh_token:refresh_token||""});
 }
+function importSupabaseEsm(){
+  return import("https://esm.sh/@supabase/supabase-js@2.49.1").catch(function(){
+    return import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm");
+  });
+}
 function initKokoroAuth(){
   migrateSessionStorageToLocalStorage();
-  clearExpiredAuthKeys();
   return fetch(resolveApi("api/auth?bootstrap=1"),{credentials:"same-origin"})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j}})})
     .then(function(x){
@@ -340,7 +330,7 @@ function initKokoroAuth(){
       if(x.j&&x.j.error)throw new Error(x.j.error);
       var url=x.j.supabase_url; var anon=x.j.supabase_anon_key;
       if(!url||!anon)throw new Error("Supabaseの公開設定がありません");
-        return import("https://esm.sh/@supabase/supabase-js@2.49.1").then(function(mod){
+        return importSupabaseEsm().then(function(mod){
         supabaseClient=mod.createClient(url,anon,{
           auth:{
             persistSession:true,
@@ -358,7 +348,6 @@ function initKokoroAuth(){
         var s=gs.data&&gs.data.session;
         if(s){
           mergeAppSessionFromSupabase(s);
-          if(!localStorage.getItem(AUTH_EXPIRY_KEY))setAuthExpiryNow();
         }
       });
     });
@@ -383,31 +372,42 @@ function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("au
 function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t||"";planModalErr.classList.toggle("is-visible",!!t)}
 function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}}
 function startFreeTrialAndChat(){
-  if(!getTok()){planModalStripeErr("ログインが必要です");return}
-  if(trialFlowBusy)return;
-  trialFlowBusy=true;
-  planModalStripeErr("");
-  fetch(resolveApi("api/auth"),{method:"POST",headers:Object.assign({},chatHeaders(),{"Content-Type":"application/json"}),body:JSON.stringify({action:"startTrial"}),credentials:"same-origin"})
-    .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
-    .then(function(x){
-      if(!x.res.ok)throw new Error((x.j&&x.j.error)||"トライアル開始に失敗しました");
-      if(typeof x.j.limit==="number")LIM=x.j.limit;
-      if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
-      patchSession({billingPlan:x.j.plan!==undefined&&x.j.plan!==null?x.j.plan:null,trialExpired:!!x.j.trial_expired});
+  function runTrial(){
+    if(!getTok()){
       closePlanChoiceModal();
-      if(x.j.trial_expired===true){showTrialEndedScreen();return}
-      showChatView();
-      logEl.innerHTML="";
-      apiMsgs=[];
-      initFromServer();
-    })
-    .catch(function(e){logErr("[startTrial]",e);planModalStripeErr(e&&e.message?e.message:"トライアル開始に失敗しました")})
-    .finally(function(){trialFlowBusy=false});
+      showAuthView();
+      syncAuthUi();
+      authErrShow("ログインのセッションがありません。ログインし直してください。");
+      return;
+    }
+    if(trialFlowBusy)return;
+    trialFlowBusy=true;
+    planModalStripeErr("");
+    fetch(resolveApi("api/auth"),{method:"POST",headers:Object.assign({},chatHeaders(),{"Content-Type":"application/json"}),body:JSON.stringify({action:"startTrial"}),credentials:"same-origin"})
+      .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+      .then(function(x){
+        if(!x.res.ok)throw new Error((x.j&&x.j.error)||"トライアル開始に失敗しました");
+        if(typeof x.j.limit==="number")LIM=x.j.limit;
+        if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+        patchSession({billingPlan:x.j.plan!==undefined&&x.j.plan!==null?x.j.plan:null,trialExpired:!!x.j.trial_expired});
+        closePlanChoiceModal();
+        if(x.j.trial_expired===true){showTrialEndedScreen();return}
+        showChatView();
+        logEl.innerHTML="";
+        apiMsgs=[];
+        initFromServer();
+      })
+      .catch(function(e){logErr("[startTrial]",e);planModalStripeErr(e&&e.message?e.message:"トライアル開始に失敗しました")})
+      .finally(function(){trialFlowBusy=false});
+  }
+  var p=kokoroAuthInitPromise||Promise.resolve();
+  p.then(runTrial).catch(function(e){logErr("[startTrial init]",e);runTrial()});
 }
 
 function needsPlanChoiceModal(planToken,authPayload){
   var ap=authPayload||{};
   if(ap.plan_selected===true)return false;
+  try{if(String(ap.plan_selected).toLowerCase()==="true")return false}catch(e){}
   var p=null;
   if(planToken!==undefined&&planToken!==null){
     var t=String(planToken).trim().toLowerCase();
@@ -904,7 +904,6 @@ function submitAuth(){
         sessionStorage.removeItem(MSG_SNAP);
         var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user,billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired};
         setSession(sess);
-        setAuthExpiryNow();
         if(typeof x.j.limit==="number")LIM=x.j.limit;
         if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
         authPass.value="";
@@ -948,7 +947,6 @@ fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}
   .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
     if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
     patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
-    setAuthExpiryNow();
     if(x.j.trial_expired===true){showTrialEndedScreen();return}
     if(needsPlanChoiceModal(x.j.plan,x.j)){showAuthView();syncAuthUi();openPlanChoiceModal(parsePlanQuery());return}
     showChatView();
@@ -1029,7 +1027,8 @@ function runAppBootstrap(){
     recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){bootstrapReturningUserPlanGate(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}
   }
 }
-initKokoroAuth().then(runAppBootstrap).catch(function(e){logErr("[initKokoroAuth]",e);runAppBootstrap()});
+kokoroAuthInitPromise=initKokoroAuth();
+kokoroAuthInitPromise.then(runAppBootstrap).catch(function(e){logErr("[initKokoroAuth]",e);runAppBootstrap()});
 window.addEventListener("pagehide",finalizePageLeaveAssistant,{passive:true});
 document.addEventListener("visibilitychange",function(){if(document.hidden)finalizeTypewriterIfNeeded()},{passive:true});
 ["pointerdown","touchstart","click"].forEach(function(evt){document.body.addEventListener(evt,primeAudioPlayback,{once:true,passive:true})});

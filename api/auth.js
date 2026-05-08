@@ -49,6 +49,39 @@ function getQueryParam(req, key) {
   }
 }
 
+/** Supabase auth.getUser の結果を安全に取り出す（data が null でも例外にしない） */
+async function getSessionUser(sbUser) {
+  const { data, error } = await sbUser.auth.getUser();
+  return { user: data?.user ?? null, error };
+}
+
+/**
+ * サービスロールで user_metadata をマージ（updateUser の「セッション必須」問題を回避）
+ */
+async function mergeUserMetadataAdmin(userId, patch) {
+  const baseUrl = process.env.SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!baseUrl || !serviceRole) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY が未設定のためユーザーメタデータを更新できません。"
+    );
+  }
+  const adminAuth = createClient(baseUrl, serviceRole, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: gu, error: gErr } = await adminAuth.auth.admin.getUserById(
+    userId
+  );
+  if (gErr) throw gErr;
+  const u = gu?.user;
+  if (!u) throw new Error("ユーザーが見つかりません。");
+  const nextMeta = { ...(u.user_metadata || {}), ...patch };
+  const { error: uErr } = await adminAuth.auth.admin.updateUserById(userId, {
+    user_metadata: nextMeta,
+  });
+  if (uErr) throw uErr;
+}
+
 /** GET / signIn 用: Supabase user_metadata のプラン選択フラグ（raw_user_meta_data） */
 function planChoiceFromUser(user) {
   const m = user?.user_metadata || {};
@@ -109,10 +142,7 @@ async function handler(req, res) {
 
     try {
       const sbUser = createUserSupabase(token);
-      const {
-        data: { user },
-        error: ue,
-      } = await sbUser.auth.getUser();
+      const { user, error: ue } = await getSessionUser(sbUser);
       if (ue || !user) {
         res.statusCode = 401;
         return res.end(
@@ -343,10 +373,7 @@ async function handler(req, res) {
     }
     try {
       const sbUser = createUserSupabase(token);
-      const {
-        data: { user },
-        error: ue,
-      } = await sbUser.auth.getUser();
+      const { user, error: ue } = await getSessionUser(sbUser);
       if (ue || !user) {
         res.statusCode = 401;
         return res.end(
@@ -443,16 +470,22 @@ async function handler(req, res) {
         }
       }
 
-      const { error: metaErr } = await sbUser.auth.updateUser({
-        data: { plan_selected: true, plan: "無料トライアル" },
-      });
-      if (metaErr) {
+      try {
+        await mergeUserMetadataAdmin(user.id, {
+          plan_selected: true,
+          plan: "無料トライアル",
+        });
+      } catch (metaErr) {
         console.error("[auth startTrial] user metadata:", metaErr);
+        const msg =
+          metaErr instanceof Error
+            ? metaErr.message
+            : String(metaErr ?? "unknown");
         res.statusCode = 502;
         return res.end(
           JSON.stringify({
             error:
-              metaErr.message ||
+              msg ||
               "プラン選択状態の保存に失敗しました。もう一度お試しください。",
           })
         );
@@ -505,25 +538,28 @@ async function handler(req, res) {
     }
     try {
       const sbUser = createUserSupabase(token);
-      const {
-        data: { user },
-        error: ue,
-      } = await sbUser.auth.getUser();
+      const { user, error: ue } = await getSessionUser(sbUser);
       if (ue || !user) {
         res.statusCode = 401;
         return res.end(
           JSON.stringify({ error: ue?.message || "セッションが無効です。" })
         );
       }
-      const { error: updErr } = await sbUser.auth.updateUser({
-        data: { plan_selected: true, plan: planLabel },
-      });
-      if (updErr) {
+      try {
+        await mergeUserMetadataAdmin(user.id, {
+          plan_selected: true,
+          plan: planLabel,
+        });
+      } catch (updErr) {
         console.error("[auth recordPlanChoice]", updErr);
+        const msg =
+          updErr instanceof Error
+            ? updErr.message
+            : String(updErr ?? "unknown");
         res.statusCode = 400;
         return res.end(
           JSON.stringify({
-            error: updErr.message || "プラン情報を保存できませんでした。",
+            error: msg || "プラン情報を保存できませんでした。",
           })
         );
       }
@@ -663,11 +699,13 @@ async function handler(req, res) {
       );
     }
 
-    const {
-      data: { session, user },
-      error,
-    } = await adminSb.auth.signInWithPassword({ email, password });
-    if (error || !session) {
+    const { data: signInData, error } = await adminSb.auth.signInWithPassword({
+      email,
+      password,
+    });
+    const session = signInData?.session ?? null;
+    const user = signInData?.user ?? null;
+    if (error || !session || !user) {
       res.statusCode = 401;
       return res.end(
         JSON.stringify({
