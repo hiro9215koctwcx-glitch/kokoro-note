@@ -2,12 +2,14 @@
  * メールログイン・登録・セション確認（Supabase Auth／サーバー側のみ）
  * POST JSON:
  *   { "action":"signUp"|"signIn", "email", "password" }
+ * - signUp: Supabase.auth.admin.generateLink(signup)+Resendで確認メール（RESEND_API_KEY・SUPABASE_SERVICE_ROLE_KEY が必要）。
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { sendSignupConfirmationEmail } from "./_lib/send-signup-verify-email.js";
 import {
   createUserSupabase,
   getDailyRemaining,
@@ -42,6 +44,15 @@ function getQueryParam(req, key) {
   } catch {
     return null;
   }
+}
+
+function absolutizeSupabaseVerifyLink(link, supabaseOrigin) {
+  if (!link || typeof link !== "string") return "";
+  const s = link.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = String(supabaseOrigin || "").replace(/\/$/, "");
+  if (!base) return s;
+  return s.startsWith("/") ? `${base}${s}` : `${base}/${s}`;
 }
 
 async function handler(req, res) {
@@ -455,51 +466,110 @@ async function handler(req, res) {
 
   try {
     if (action === "signUp") {
-      const {
-        data: { session, user },
-        error,
-      } = await adminSb.auth.signUp({ email, password });
-      if (error) {
-        res.statusCode = 400;
-        return res.end(JSON.stringify({ error: error.message }));
-      }
-      if (!session || !session.access_token) {
-        res.statusCode = 200;
+      const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const resendKey = process.env.RESEND_API_KEY;
+
+      if (!serviceRole || !resendKey) {
+        res.statusCode = 500;
         return res.end(
           JSON.stringify({
-            needEmailConfirm: true,
-            user: user ? { id: user.id, email: user.email } : null,
-            message:
-              "確認メールを送信しました。メール内のリンクを開いてからログインしてください。",
+            error:
+              "サーバー設定: 新規登録確認メールには SUPABASE_SERVICE_ROLE_KEY と RESEND_API_KEY が必要です。",
           })
         );
       }
 
-      const sbUser = createUserSupabase(session.access_token);
-      let remaining = RALLY_DAILY_LIMIT;
-      let rallyLimit = RALLY_DAILY_LIMIT;
-      let plan = null;
-      let trial_expired = false;
+      const adminAuth = createClient(url, serviceRole, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+
+      const {
+        data: linkPack,
+        error: linkErr,
+      } = await adminAuth.auth.admin.generateLink({
+        type: "signup",
+        email,
+        password,
+        options: {
+          redirectTo: RESET_REDIRECT_TO,
+        },
+      });
+
+      if (linkErr || !linkPack?.user) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error:
+              linkErr?.message ||
+              String(linkErr ?? "ユーザー登録に失敗しました。"),
+            code: linkErr?.code ?? undefined,
+            status:
+              typeof linkErr?.status === "number" ? linkErr.status : undefined,
+          })
+        );
+      }
+
+      const rawLink =
+        linkPack.properties && typeof linkPack.properties.action_link === "string"
+          ? linkPack.properties.action_link
+          : "";
+
+      const confirmationUrl = absolutizeSupabaseVerifyLink(rawLink, url);
+
+      const userObj = linkPack.user;
+      const userId =
+        userObj?.id !== undefined && userObj?.id !== null
+          ? String(userObj.id)
+          : null;
+      const userEmailShown =
+        typeof userObj?.email === "string" ? userObj.email : email;
+
+      if (!confirmationUrl) {
+        if (userId) {
+          try {
+            await adminAuth.auth.admin.deleteUser(userId);
+          } catch (delCleanup) {
+            console.error("[auth signUp]", delCleanup);
+          }
+        }
+        res.statusCode = 500;
+        return res.end(
+          JSON.stringify({ error: "確認用リンクの生成に失敗しました。" })
+        );
+      }
+
       try {
-        const r = await getDailyRemaining(sbUser, user.id);
-        remaining = r.remaining;
-        if (typeof r.limit === "number") rallyLimit = r.limit;
-        plan = r.plan ?? null;
-        trial_expired = Boolean(r.trial_expired);
-      } catch (e) {
-        console.error("[auth signUp] remaining:", e);
+        await sendSignupConfirmationEmail({
+          to: email,
+          confirmationUrl,
+        });
+      } catch (mailErr) {
+        console.error("[auth signUp Resend]", mailErr);
+        if (userId) {
+          try {
+            await adminAuth.auth.admin.deleteUser(userId);
+          } catch (delErr) {
+            console.error("[auth signUp deleteUser rollback]", delErr);
+          }
+        }
+        const msg =
+          mailErr instanceof Error
+            ? mailErr.message
+            : "確認メールの送信に失敗しました。";
+        res.statusCode = 502;
+        return res.end(JSON.stringify({ error: msg }));
       }
 
       res.statusCode = 200;
       return res.end(
         JSON.stringify({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          user: { id: user.id, email: user.email },
-          remaining,
-          limit: rallyLimit,
-          plan,
-          trial_expired,
+          needEmailConfirm: true,
+          user: userId ? { id: userId, email: userEmailShown } : null,
+          message:
+            "確認メールを送信しました。メール内のリンクを開いてからログインしてください。",
         })
       );
     }
