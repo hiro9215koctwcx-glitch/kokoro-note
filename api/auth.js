@@ -7,6 +7,7 @@
  * - signUp: Supabase.auth.admin.generateLink(signup)+Resendで確認メール（RESEND_API_KEY・SUPABASE_SERVICE_ROLE_KEY が必要）。
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
+ * GET ?bootstrap=1 → { supabase_url, supabase_anon_key }（ブラウザ用・認証不要）
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired + plan_selected / chosen_plan（user_metadata）
  */
 
@@ -90,6 +91,16 @@ async function handler(req, res) {
   });
 
   if (req.method === "GET") {
+    if (getQueryParam(req, "bootstrap") === "1") {
+      res.statusCode = 200;
+      return res.end(
+        JSON.stringify({
+          supabase_url: url,
+          supabase_anon_key: anon,
+        })
+      );
+    }
+
     const token = getBearer(req);
     if (!token) {
       res.statusCode = 401;
