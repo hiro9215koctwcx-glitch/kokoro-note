@@ -3,7 +3,7 @@
  * 環境変数 RESEND_API_KEY が必須。
  */
 
-const FROM = "こころノート <onboarding@resend.dev>";
+const FROM = "こころノート <noreply@kokoronotes.com>";
 const SUBJECT = "【こころノート】メールアドレスの確認";
 const BODY_INTRO =
   "ご登録ありがとうございます。以下のリンクをクリックしてメールアドレスを確認してください。";
