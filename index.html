@@ -306,6 +306,7 @@ function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();
 var stripeCheckoutBusy=false;
 var trialFlowBusy=false;
 var selectedPlanKey=null;
+var PLAN_DISPLAY_LABELS={light_monthly:"ライトプラン（月額）",light_yearly:"ライトプラン（年額）",standard_monthly:"スタンダードプラン（月額）",standard_yearly:"スタンダードプラン（年額）"};
 
 function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("auth-hide");planModal.setAttribute("aria-hidden","true");selectedPlanKey=null;if(planConfirmBtn)planConfirmBtn.disabled=true;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){c.classList.remove("is-selected");c.setAttribute("aria-pressed","false")})}if(planModalErr){planModalErr.textContent="";planModalErr.classList.remove("is-visible")}}
 function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t||"";planModalErr.classList.toggle("is-visible",!!t)}
@@ -333,7 +334,9 @@ function startFreeTrialAndChat(){
     .finally(function(){trialFlowBusy=false});
 }
 
-function needsPlanChoiceModal(planToken){
+function needsPlanChoiceModal(planToken,authPayload){
+  var ap=authPayload||{};
+  if(ap.plan_selected===true)return false;
   var p=null;
   if(planToken!==undefined&&planToken!==null){
     var t=String(planToken).trim().toLowerCase();
@@ -367,7 +370,7 @@ function bootstrapReturningUserPlanGate(lpPrefill){
       if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
       patchSession({billingPlan:x.j.plan!=null&&x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
       if(x.j.trial_expired===true){showTrialEndedScreen();return}
-      if(!needsPlanChoiceModal(x.j.plan)){
+      if(!needsPlanChoiceModal(x.j.plan,x.j)){
         enterChatSkippingPlanChoice();
         return;
       }
@@ -403,9 +406,9 @@ function stripeCheckoutRedirect(planKey,opt){
   return fetch(resolveApi("api/checkout"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({plan:planKey}),credentials:"same-origin"})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})})
     .then(function(x){
-      stripeCheckoutBusy=false;
       var preferModal=!planModal.classList.contains("auth-hide")&&!!opt.failInModal;
       if(x.res.status===401){
+        stripeCheckoutBusy=false;
         clearSessionAll();
         closePlanChoiceModal();
         showAuthView();
@@ -415,19 +418,34 @@ function stripeCheckoutRedirect(planKey,opt){
         throw new Error(m401);
       }
       if(!x.res.ok){
+        stripeCheckoutBusy=false;
         var mb=(x.j&&x.j.error)||("HTTP "+x.res.status);
         if(preferModal)planModalStripeErr(mb);
         else{closePlanChoiceModal();showAuthView();syncAuthUi();authErrShow(mb);}
         throw new Error(mb);
       }
       var u=x.j&&x.j.url;if(!u){
+        stripeCheckoutBusy=false;
         var mz="お支払いページのURLを取得できませんでした";
         if(preferModal)planModalStripeErr(mz);
         else{closePlanChoiceModal();showAuthView();syncAuthUi();authErrShow(mz);}
         throw new Error(mz);
       }
-      window.location.href=u;
-      return null;
+      var planLabel=PLAN_DISPLAY_LABELS[planKey]||planKey;
+      return fetch(resolveApi("api/auth"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({action:"recordPlanChoice",plan:planLabel}),credentials:"same-origin"})
+        .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})})
+        .then(function(rx){
+          stripeCheckoutBusy=false;
+          var pm=!planModal.classList.contains("auth-hide")&&!!opt.failInModal;
+          if(!rx.res.ok){
+            var me=(rx.j&&rx.j.error)||("HTTP "+rx.res.status);
+            if(pm)planModalStripeErr(me);
+            else{closePlanChoiceModal();showAuthView();syncAuthUi();authErrShow(me);}
+            throw new Error(me);
+          }
+          window.location.href=u;
+          return null;
+        });
     })
     .catch(function(e){
       stripeCheckoutBusy=false;
@@ -819,7 +837,7 @@ function submitAuth(){
         if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
         authPass.value="";
         if(x.j.trial_expired===true){closePlanChoiceModal();showTrialEndedScreen();return}
-        if(needsPlanChoiceModal(x.j.plan)){
+        if(needsPlanChoiceModal(x.j.plan,x.j)){
           openPlanChoiceModal(parsePlanQuery());
         }else{
           enterChatSkippingPlanChoice();
@@ -855,11 +873,12 @@ if(btnTrialPickPlan)btnTrialPickPlan.addEventListener("click",function(){openPla
 
 function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
-  .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
+  .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j};})})
   .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
     if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
     patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
     if(x.j.trial_expired===true){showTrialEndedScreen();return}
+    if(needsPlanChoiceModal(x.j.plan,x.j)){showAuthView();syncAuthUi();openPlanChoiceModal(parsePlanQuery());return}
     showChatView();
     if(loadSnapshot()){try{inp.focus()}catch(z){};return}
     logEl.innerHTML="";apiMsgs=[];

@@ -2,10 +2,12 @@
  * メールログイン・登録・セション確認（Supabase Auth／サーバー側のみ）
  * POST JSON:
  *   { "action":"signUp"|"signIn", "email", "password" }
+ *   { "action":"startTrial" } + Authorization: Bearer …
+ *   { "action":"recordPlanChoice", "plan": "プラン名" } + Bearer（ユーザーメタデータに plan_selected / plan を保存）
  * - signUp: Supabase.auth.admin.generateLink(signup)+Resendで確認メール（RESEND_API_KEY・SUPABASE_SERVICE_ROLE_KEY が必要）。
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
- * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired
+ * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired + plan_selected / chosen_plan（user_metadata）
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -44,6 +46,16 @@ function getQueryParam(req, key) {
   } catch {
     return null;
   }
+}
+
+/** GET / signIn 用: Supabase user_metadata のプラン選択フラグ（raw_user_meta_data） */
+function planChoiceFromUser(user) {
+  const m = user?.user_metadata || {};
+  const ps = m.plan_selected;
+  const planSelected = ps === true || ps === "true";
+  const chosen =
+    typeof m.plan === "string" && m.plan.trim() ? m.plan.trim() : null;
+  return { plan_selected: planSelected, chosen_plan: chosen };
 }
 
 function absolutizeSupabaseVerifyLink(link, supabaseOrigin) {
@@ -111,6 +123,8 @@ async function handler(req, res) {
         console.error("[auth GET] remaining:", err);
       }
 
+      const metaChoice = planChoiceFromUser(user);
+
       res.statusCode = 200;
       return res.end(
         JSON.stringify({
@@ -119,6 +133,8 @@ async function handler(req, res) {
           limit: rallyLimit,
           plan,
           trial_expired,
+          plan_selected: metaChoice.plan_selected,
+          chosen_plan: metaChoice.chosen_plan,
         })
       );
     } catch (err) {
@@ -416,6 +432,21 @@ async function handler(req, res) {
         }
       }
 
+      const { error: metaErr } = await sbUser.auth.updateUser({
+        data: { plan_selected: true, plan: "無料トライアル" },
+      });
+      if (metaErr) {
+        console.error("[auth startTrial] user metadata:", metaErr);
+        res.statusCode = 502;
+        return res.end(
+          JSON.stringify({
+            error:
+              metaErr.message ||
+              "プラン選択状態の保存に失敗しました。もう一度お試しください。",
+          })
+        );
+      }
+
       let remaining = RALLY_DAILY_LIMIT;
       let rallyLimit = RALLY_DAILY_LIMIT;
       let plan = null;
@@ -442,6 +473,53 @@ async function handler(req, res) {
       );
     } catch (err) {
       console.error("[auth startTrial]", err);
+      res.statusCode = 502;
+      return res.end(JSON.stringify({ error: "処理に失敗しました。" }));
+    }
+  }
+
+  if (body.action === "recordPlanChoice") {
+    const token = getBearer(req);
+    if (!token) {
+      res.statusCode = 401;
+      return res.end(JSON.stringify({ error: "認証が必要です。" }));
+    }
+    const planLabel =
+      typeof body.plan === "string" ? body.plan.trim() : "";
+    if (!planLabel) {
+      res.statusCode = 400;
+      return res.end(
+        JSON.stringify({ error: "plan（プラン名）が必要です。" })
+      );
+    }
+    try {
+      const sbUser = createUserSupabase(token);
+      const {
+        data: { user },
+        error: ue,
+      } = await sbUser.auth.getUser();
+      if (ue || !user) {
+        res.statusCode = 401;
+        return res.end(
+          JSON.stringify({ error: ue?.message || "セッションが無効です。" })
+        );
+      }
+      const { error: updErr } = await sbUser.auth.updateUser({
+        data: { plan_selected: true, plan: planLabel },
+      });
+      if (updErr) {
+        console.error("[auth recordPlanChoice]", updErr);
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error: updErr.message || "プラン情報を保存できませんでした。",
+          })
+        );
+      }
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      console.error("[auth recordPlanChoice]", err);
       res.statusCode = 502;
       return res.end(JSON.stringify({ error: "処理に失敗しました。" }));
     }
@@ -602,6 +680,8 @@ async function handler(req, res) {
       console.error("[auth signIn] remaining:", e);
     }
 
+    const metaChoice = planChoiceFromUser(user);
+
     res.statusCode = 200;
     return res.end(
       JSON.stringify({
@@ -612,6 +692,8 @@ async function handler(req, res) {
         limit: rallyLimit,
         plan,
         trial_expired,
+        plan_selected: metaChoice.plan_selected,
+        chosen_plan: metaChoice.chosen_plan,
       })
     );
   } catch (err) {
