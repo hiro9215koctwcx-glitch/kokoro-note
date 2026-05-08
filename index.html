@@ -98,6 +98,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .plan-modal-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(61,61,61,.45);backdrop-filter:blur(4px);-webkit-overflow-scrolling:touch;overflow-y:auto}
 .plan-modal-window{width:100%;max-width:432px;background:var(--white);border-radius:22px;box-shadow:0 20px 50px rgba(80,70,60,.2);padding:26px 22px 24px;margin:auto}
 .plan-modal-window .plan-modal-title{font-size:1.2rem;font-weight:600;text-align:center;margin:0 0 10px;color:var(--text);letter-spacing:.03em}
+.plan-modal-window .plan-year-discount-badge{display:block;width:fit-content;margin:0 auto 12px;padding:6px 14px;border-radius:999px;background:var(--bubble);font-size:.8125rem;font-weight:600;color:var(--green-deep);letter-spacing:.03em;white-space:nowrap}
 .plan-modal-window .plan-modal-lead{font-size:.875rem;color:var(--muted);text-align:center;line-height:1.55;margin:0 0 18px}
 .plan-modal-err{font-size:.8125rem;color:#a04444;text-align:center;margin:0 0 12px;min-height:1.25em;display:none}
 .plan-modal-err.is-visible{display:block}
@@ -157,13 +158,14 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 <div id="plan-modal" class="plan-modal-overlay auth-hide" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
   <div class="plan-modal-window">
     <p class="plan-modal-title" id="plan-modal-title">プランをお選びください</p>
+    <p class="plan-year-discount-badge">年間 最大19%OFF</p>
     <p class="plan-modal-lead">有料プランでご利用開始いただくか、無料トライアルでお試しいただけます。</p>
     <p id="plan-modal-err" class="plan-modal-err" role="alert"></p>
     <div class="plan-cards" id="plan-cards">
       <button type="button" class="plan-card" data-plan="light_monthly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">月額800円</span></button>
-      <button type="button" class="plan-card" data-plan="light_yearly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">年額6,400円（月あたり約720円・10%OFF）</span></button>
+      <button type="button" class="plan-card" data-plan="light_yearly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">年額7,800円（月あたり約650円・約19%OFF）</span></button>
       <button type="button" class="plan-card" data-plan="standard_monthly" aria-pressed="false"><span class="plan-card-name">スタンダードプラン</span><span class="plan-card-meta">月額1,980円</span></button>
-      <button type="button" class="plan-card" data-plan="standard_yearly" aria-pressed="false"><span class="plan-card-name">スタンダードプラン</span><span class="plan-card-meta">年額15,840円（月あたり約1,782円・10%OFF）</span></button>
+      <button type="button" class="plan-card" data-plan="standard_yearly" aria-pressed="false"><span class="plan-card-name">スタンダードプラン</span><span class="plan-card-meta">年額19,800円（月あたり約1,650円・約17%OFF）</span></button>
     </div>
     <button type="button" class="btn-plan-primary" id="plan-confirm-btn" disabled>このプランで始める</button>
     <button type="button" class="btn-plan-outline" id="plan-free-trial-btn">無料トライアルで始める</button>
