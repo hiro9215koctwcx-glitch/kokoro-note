@@ -230,6 +230,7 @@ var LIM=5,DBL=700;
 var remainCount=LIM;var trialDaysRemain=null;
 var registerMode=false,resetMode=false,passVisible=true,passVisibleUpd1=true,passVisibleUpd2=true;
 var recoveryAccessToken=null,recoveryRefreshToken=null,recoveryCode=null,updReturnTimer=null;
+var passwordRecoveryUiActive=false,blockKokoroMergeFromSupabase=false;
 var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログインして始められます。";
 var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再設定用のリンクをお送りします。";
 var SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -357,6 +358,7 @@ function clearSessionAll(){
 function readSessionTrialExpired(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return false;var o=JSON.parse(s);return o.trialExpired===true}catch(e){return false}}
 function migrateSessionStorageToLocalStorage(){try{var o=sessionStorage.getItem(SESS_KEY);if(o&&!localStorage.getItem(SESS_KEY)){localStorage.setItem(SESS_KEY,o);sessionStorage.removeItem(SESS_KEY)}}catch(e){}}
 function mergeAppSessionFromSupabase(sess){
+  if(blockKokoroMergeFromSupabase||passwordRecoveryUiActive)return;
   var prev={};
   try{var raw=localStorage.getItem(SESS_KEY);if(raw)prev=JSON.parse(raw)}catch(e){}
   setSession({
@@ -371,6 +373,9 @@ function persistSupabaseSession(access_token,refresh_token){
   if(!supabaseClient||!access_token)return Promise.resolve();
   return supabaseClient.auth.setSession({access_token:access_token,refresh_token:refresh_token||""});
 }
+/** createClient より前に同期的に読む。redirect の type=recovery（復旧リンク）のみ */
+function extractRecoveryParamsFromLocation(){try{var h=(window.location.hash||"").replace(/^#/,""),qRaw=window.location.search||"",spH=new URLSearchParams(h),spQ=new URLSearchParams(qRaw.charAt(0)==="?"?qRaw.slice(1):qRaw),tp=String(spH.get("type")||spQ.get("type")||"").trim().toLowerCase();if(tp!=="recovery")return null;var at=spH.get("access_token")||spQ.get("access_token")||null,rf=spH.get("refresh_token")||spQ.get("refresh_token")||null,co=spQ.get("code")||spH.get("code")||null;if(!(at||co))return null;return{access_token:at,refresh_token:rf,code:co,type:"recovery"}}catch(e){return null}}
+function exitPasswordRecoveryGate(){passwordRecoveryUiActive=false;blockKokoroMergeFromSupabase=false}
 function importSupabaseEsm(){
   return import("https://esm.sh/@supabase/supabase-js@2.49.1").catch(function(){
     return import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm");
@@ -378,6 +383,8 @@ function importSupabaseEsm(){
 }
 function initKokoroAuth(){
   migrateSessionStorageToLocalStorage();
+  var recoveryUrlSnap=extractRecoveryParamsFromLocation();
+  if(recoveryUrlSnap&&recoveryUrlSnap.type==="recovery")blockKokoroMergeFromSupabase=true;
   return fetch(resolveApi("api/auth?bootstrap=1"),{credentials:"same-origin"})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j}})})
     .then(function(x){
@@ -396,14 +403,52 @@ function initKokoroAuth(){
           }
         });
         supabaseClient.auth.onAuthStateChange(function(evt,session){
-          if(session)mergeAppSessionFromSupabase(session);
+          if(evt==="PASSWORD_RECOVERY"&&session){
+            if(passwordRecoveryUiActive)return;
+            enterRecoveryPasswordFlow({
+              access_token:session.access_token,
+              refresh_token:session.refresh_token,
+              code:null,
+              type:"recovery"
+            });
+            stripAuthFromUrl();
+            return;
+          }
+          if(evt==="INITIAL_SESSION"){
+            if(recoveryUrlSnap&&recoveryUrlSnap.type==="recovery"&&session&&!passwordRecoveryUiActive){
+              enterRecoveryPasswordFlow({
+                access_token:recoveryUrlSnap.access_token||session.access_token,
+                refresh_token:recoveryUrlSnap.refresh_token||session.refresh_token,
+                code:recoveryUrlSnap.code||null,
+                type:"recovery"
+              });
+              stripAuthFromUrl();
+              return;
+            }
+            if(session&&!blockKokoroMergeFromSupabase&&!passwordRecoveryUiActive)mergeAppSessionFromSupabase(session);
+            return;
+          }
+          if(evt==="SIGNED_OUT")return;
+          if(session&&!blockKokoroMergeFromSupabase&&!passwordRecoveryUiActive&&(evt==="SIGNED_IN"||evt==="TOKEN_REFRESHED"))mergeAppSessionFromSupabase(session);
         });
         return supabaseClient.auth.getSession();
       }).then(function(gs){
+        if(passwordRecoveryUiActive)return;
         var s=gs.data&&gs.data.session;
-        if(s){
-          mergeAppSessionFromSupabase(s);
+        if(recoveryUrlSnap&&recoveryUrlSnap.type==="recovery"){
+          var pay={
+            access_token:recoveryUrlSnap.access_token||(s&&s.access_token)||null,
+            refresh_token:recoveryUrlSnap.refresh_token||(s&&s.refresh_token)||null,
+            code:recoveryUrlSnap.code||null,
+            type:"recovery"
+          };
+          if(pay.access_token||pay.code){
+            enterRecoveryPasswordFlow(pay);
+            stripAuthFromUrl();
+            return;
+          }
         }
+        if(s&&!blockKokoroMergeFromSupabase&&!passwordRecoveryUiActive)mergeAppSessionFromSupabase(s);
       });
     });
 }
@@ -483,6 +528,7 @@ function enterChatSkippingPlanChoice(){
 
 /** ログイン済みで ?plan= など付きの復帶時に、有料プランならチャットのみ */
 function bootstrapReturningUserPlanGate(lpPrefill){
+  if(passwordRecoveryUiActive)return;
   var tok=getTok();
   if(!tok){console.error("[bootstrap plan-gate] トークンがありません");showAuthView();syncAuthUi();return;}
   fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
@@ -664,8 +710,8 @@ function updErrHide(){updErr.style.display="none";updErr.textContent=""}
 function updSuccessShow(t){updSucc.style.display="block";updSucc.textContent=t||""}
 function updSuccessHide(){updSucc.style.display="none";updSucc.textContent=""}
 function applyUpdPassVisibility(){if(updPass1){updPass1.type=passVisibleUpd1?"text":"password";if(updEye1){updEye1.setAttribute("aria-pressed",passVisibleUpd1?"true":"false");updEye1.setAttribute("aria-label",passVisibleUpd1?"パスワードを隠す":"パスワードを表示")}}if(updPass2){updPass2.type=passVisibleUpd2?"text":"password";if(updEye2){updEye2.setAttribute("aria-pressed",passVisibleUpd2?"true":"false");updEye2.setAttribute("aria-label",passVisibleUpd2?"パスワードを隠す":"パスワードを表示")}}}
-function enterRecoveryPasswordFlow(rec){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}clearSessionAll();hideTrialEndedScreen();recoveryAccessToken=(rec&&rec.access_token)||null;recoveryRefreshToken=(rec&&rec.refresh_token)||null;recoveryCode=(rec&&rec.code)||null;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
-function submitUpdatePassword(){updErrHide();updSuccessHide();var tok=recoveryAccessToken,rt=recoveryRefreshToken,co=recoveryCode;if(!(tok||co)){updErrShow("セッション情報が見つかりません。メールのリンクをもう一度開いてください。");return}if(tok&&!rt&&!co){console.warn("[kokoro recovery] refresh_token が未取得です（ハッシュまたはクエリに含まれているか確認してください）")}var p1=(updPass1&&updPass1.value)||"",p2=(updPass2&&updPass2.value)||"";if(!p1||!p2){updErrShow("新しいパスワードと確認を入力してください");return}if(p1!==p2){updErrShow("パスワードが一致しません");return}var bod={password:p1};if(tok)bod.access_token=tok;if(rt)bod.refresh_token=rt;if(co)bod.code=co;console.log("[kokoro recovery] POST body keys:",Object.keys(bod));updSubmit.disabled=true;updatePasswordViaApi(bod).then(function(){updSuccessShow("パスワードを更新しました。ログインしてください。");if(updReturnTimer)clearTimeout(updReturnTimer);updReturnTimer=setTimeout(function(){updReturnTimer=null;recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;updSuccessHide();authLoginCard.classList.remove("auth-hide");authUpdateCard.classList.add("auth-hide");syncAuthUi()},3000)}).catch(function(e){updErrShow(e&&e.message?e.message:"更新に失敗しました")}).finally(function(){updSubmit.disabled=false})}
+function enterRecoveryPasswordFlow(rec){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}passwordRecoveryUiActive=true;blockKokoroMergeFromSupabase=true;clearSessionAll();hideTrialEndedScreen();recoveryAccessToken=(rec&&rec.access_token)||null;recoveryRefreshToken=(rec&&rec.refresh_token)||null;recoveryCode=(rec&&rec.code)||null;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
+function submitUpdatePassword(){updErrHide();updSuccessHide();var tok=recoveryAccessToken,rt=recoveryRefreshToken,co=recoveryCode;if(!(tok||co)){updErrShow("セッション情報が見つかりません。メールのリンクをもう一度開いてください。");return}if(tok&&!rt&&!co){console.warn("[kokoro recovery] refresh_token が未取得です（ハッシュまたはクエリに含まれているか確認してください）")}var p1=(updPass1&&updPass1.value)||"",p2=(updPass2&&updPass2.value)||"";if(!p1||!p2){updErrShow("新しいパスワードと確認を入力してください");return}if(p1!==p2){updErrShow("パスワードが一致しません");return}var bod={password:p1};if(tok)bod.access_token=tok;if(rt)bod.refresh_token=rt;if(co)bod.code=co;console.log("[kokoro recovery] POST body keys:",Object.keys(bod));updSubmit.disabled=true;updatePasswordViaApi(bod).then(function(){updSuccessShow("パスワードを更新しました。ログインしてください。");if(updReturnTimer)clearTimeout(updReturnTimer);updReturnTimer=setTimeout(function(){updReturnTimer=null;exitPasswordRecoveryGate();recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;updSuccessHide();authLoginCard.classList.remove("auth-hide");authUpdateCard.classList.add("auth-hide");syncAuthUi()},3000)}).catch(function(e){updErrShow(e&&e.message?e.message:"更新に失敗しました")}).finally(function(){updSubmit.disabled=false})}
 
 function applyPassVisibility(){authPass.type=passVisible?"text":"password";if(authPassEye){authPassEye.setAttribute("aria-pressed",passVisible?"true":"false");authPassEye.setAttribute("aria-label",passVisible?"パスワードを隠す":"パスワードを表示")}}
 
@@ -1004,7 +1050,7 @@ authPassEye.addEventListener("click",function(){passVisible=!passVisible;applyPa
 var btnPlanPortal=document.getElementById("btn-plan-portal");
 if(btnPlanPortal)btnPlanPortal.addEventListener("click",function(){openBillingPortal()})
 else{console.error("[kokoro] btn-plan-portal が見つかりません")}
-btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;trialDaysRemain=null;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM,null)});
+btnLogout.addEventListener("click",function(){clearSessionAll();exitPasswordRecoveryGate();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;trialDaysRemain=null;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM,null)});
 planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
 planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
 planFreeTrialBtn.addEventListener("click",function(){planModalStripeErr("");startFreeTrialAndChat()});
@@ -1015,7 +1061,7 @@ if(btnTrialUpgradeLight)btnTrialUpgradeLight.addEventListener("click",function()
 if(btnTrialUpgradeStandard)btnTrialUpgradeStandard.addEventListener("click",function(){stripeCheckoutRedirect("standard_monthly",{}).catch(function(){})});
 if(btnTrialMorePlans)btnTrialMorePlans.addEventListener("click",function(){openPlanChoiceModal(parsePlanQuery())});
 
-function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
+function tryResumeSession(){if(passwordRecoveryUiActive)return;var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
   .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j};})})
   .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
@@ -1090,12 +1136,13 @@ syncMicButtonEnabled()
 }
 
 function runAppBootstrap(){
+  if(passwordRecoveryUiActive)return;
   var recParse=parseRecoveryFromUrl();
   if(recParse){
     if(recParse.type==="signup"){
       recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;
       showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessShow("メール認証が完了しました。ログインしてください。");stripAuthFromUrl()
-    }else{
+    }else if(recParse.type==="recovery"){
       enterRecoveryPasswordFlow(recParse)
     }
   }else{
