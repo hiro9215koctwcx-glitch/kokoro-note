@@ -7,8 +7,8 @@
  * - signUp: Supabase.auth.admin.generateLink(signup)+Resendで確認メール（RESEND_API_KEY・SUPABASE_SERVICE_ROLE_KEY が必要）。
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
- *   … recovery の access_token を検証後、SUPABASE_SERVICE_ROLE_KEY があれば admin でパスワードのみ更新。
- *     それ以外・失敗時は従来どおり匿名クライアントで setSession + updateUser。
+ *   … SERVICE_ROLE のクライアントで setSession → session.user.id を取得し、admin.updateUserById で更新。
+ *     code のみの場合は先に anon で exchangeCodeForSession。
  * GET ?bootstrap=1 → { supabase_url, supabase_anon_key }（ブラウザ用・認証不要）
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired + plan_selected / chosen_plan（user_metadata）
  */
@@ -291,14 +291,6 @@ async function handler(req, res) {
     const code =
       typeof body.code === "string" ? body.code.trim() : "";
 
-    const sessionSb = createClient(url, anon, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    });
-
     try {
       if (!password) {
         res.statusCode = 400;
@@ -311,10 +303,28 @@ async function handler(req, res) {
       }
 
       if (code) {
+        const sessionSbCode = createClient(url, anon, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        });
+        console.log("[auth updatePassword] code あり → exchangeCodeForSession を試行");
+
         const {
           data: exData,
           error: exErr,
-        } = await sessionSb.auth.exchangeCodeForSession(code);
+        } = await sessionSbCode.auth.exchangeCodeForSession(code);
+
+        console.log(
+          "[auth updatePassword] exchangeCodeForSession error:",
+          exErr ? exErr.message : null
+        );
+        console.log(
+          "[auth updatePassword] exchangeCodeForSession has session:",
+          Boolean(exData?.session)
+        );
 
         if (exErr || !exData?.session) {
           res.statusCode = 400;
@@ -345,86 +355,81 @@ async function handler(req, res) {
         );
       }
 
-      /** 復旧JWTを検証し、サービスロールでパスワードのみ更新（setSession を経由しない） */
       const serviceRole = (
         process.env.SUPABASE_SERVICE_ROLE_KEY ||
         ""
       ).trim();
-      if (serviceRole) {
-        const verifySb = createClient(url, anon, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-          },
-        });
-        try {
-          const { data: gud, error: guErr } =
-            await verifySb.auth.getUser(access_token);
-
-          const uid = gud?.user?.id;
-          if (!guErr && uid) {
-            const srvSb = createClient(url, serviceRole, {
-              auth: {
-                persistSession: false,
-                autoRefreshToken: false,
-                detectSessionInUrl: false,
-              },
-            });
-            const { error: adErr } = await srvSb.auth.admin.updateUserById(uid, {
-              password,
-            });
-
-            if (!adErr) {
-              res.statusCode = 200;
-              return res.end(JSON.stringify({ success: true }));
-            }
-
-            console.error(
-              "[auth updatePassword admin.updateUserById]",
-              adErr.message || String(adErr)
-            );
-            res.statusCode = 400;
-            return res.end(
-              JSON.stringify({
-                error: adErr.message || String(adErr),
-                code: adErr.code ?? undefined,
-                status:
-                  typeof adErr.status === "number" ? adErr.status : undefined,
-              })
-            );
-          }
-
-          console.warn(
-            "[auth updatePassword getUser]",
-            guErr?.message ||
-              (guErr ? String(guErr) : "user id が取得できませんでした"),
-            "— setSession にフォールバックします。"
-          );
-        } catch (e) {
-          console.error("[auth updatePassword admin path]", e);
-        }
-      }
-
-      const { error: setErr } = await sessionSb.auth.setSession({
-        access_token,
-        refresh_token: refresh_token || "",
-      });
-
-      if (setErr) {
-        res.statusCode = 400;
+      if (!serviceRole) {
+        console.log("[auth updatePassword] SUPABASE_SERVICE_ROLE_KEY が未設定");
+        res.statusCode = 500;
         return res.end(
           JSON.stringify({
-            error: setErr.message || String(setErr),
-            code: setErr.code ?? undefined,
-            status: typeof setErr.status === "number" ? setErr.status : undefined,
+            error:
+              "サーバー設定: SUPABASE_SERVICE_ROLE_KEY が未設定です。パスワード更新に必要です。",
           })
         );
       }
 
-      const { error: updErr } = await sessionSb.auth.updateUser({
-        password,
+      const supabaseAdmin = createClient(url, serviceRole, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
       });
+
+      console.log(
+        "[auth updatePassword] step1 supabaseAdmin.setSession （access_token 長:",
+        access_token.length,
+        "refresh_token 有無:",
+        Boolean(refresh_token),
+        "）"
+      );
+      const {
+        data: setData,
+        error: setErr,
+      } = await supabaseAdmin.auth.setSession({
+        access_token,
+        refresh_token: refresh_token || "",
+      });
+      console.log(
+        "[auth updatePassword] step1 setSession error:",
+        setErr ? setErr.message : null
+      );
+      console.log(
+        "[auth updatePassword] step1 setSession.user.id:",
+        setData?.session?.user?.id ?? null
+      );
+
+      const uid = setData?.session?.user?.id;
+      if (setErr || !uid) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({
+            error:
+              setErr?.message ||
+              "セッションの確立に失敗しました。トークンの有効期限を確認してください。",
+            code: setErr?.code ?? undefined,
+            status:
+              typeof setErr?.status === "number" ? setErr.status : undefined,
+          })
+        );
+      }
+
+      console.log("[auth updatePassword] step2 admin.updateUserById uid:", uid);
+      const {
+        data: updData,
+        error: updErr,
+      } = await supabaseAdmin.auth.admin.updateUserById(uid, { password });
+
+      console.log(
+        "[auth updatePassword] step2 updateUserById error:",
+        updErr ? updErr.message : null
+      );
+      console.log(
+        "[auth updatePassword] step2 updateUserById user.id:",
+        updData?.user?.id ?? null
+      );
 
       if (updErr) {
         res.statusCode = 400;
@@ -432,11 +437,13 @@ async function handler(req, res) {
           JSON.stringify({
             error: updErr.message || String(updErr),
             code: updErr.code ?? undefined,
-            status: typeof updErr.status === "number" ? updErr.status : undefined,
+            status:
+              typeof updErr.status === "number" ? updErr.status : undefined,
           })
         );
       }
 
+      console.log("[auth updatePassword] 完了 success");
       res.statusCode = 200;
       return res.end(JSON.stringify({ success: true }));
     } catch (err) {
