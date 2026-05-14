@@ -7,7 +7,7 @@
  * - signUp: Supabase.auth.admin.generateLink(signup)+Resendで確認メール（RESEND_API_KEY・SUPABASE_SERVICE_ROLE_KEY が必要）。
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
- *   … SERVICE_ROLE のクライアントで setSession → session.user.id を取得し、admin.updateUserById で更新。
+ *   … anon で setSession してユーザーIDを取得し、SERVICE_ROLE の admin.updateUserById でパスワード更新。
  *     code のみの場合は先に anon で exchangeCodeForSession。
  * GET ?bootstrap=1 → { supabase_url, supabase_anon_key }（ブラウザ用・認証不要）
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired + plan_selected / chosen_plan（user_metadata）
@@ -370,6 +370,14 @@ async function handler(req, res) {
         );
       }
 
+      const anonUserSb = createClient(url, anon, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
+
       const supabaseAdmin = createClient(url, serviceRole, {
         auth: {
           persistSession: false,
@@ -379,39 +387,58 @@ async function handler(req, res) {
       });
 
       console.log(
-        "[auth updatePassword] step1 supabaseAdmin.setSession （access_token 長:",
+        "[auth updatePassword] step1 anon.setSession （access_token 長:",
         access_token.length,
         "refresh_token 有無:",
         Boolean(refresh_token),
         "）"
       );
       const {
-        data: setData,
-        error: setErr,
-      } = await supabaseAdmin.auth.setSession({
+        data: anonSetData,
+        error: anonSetErr,
+      } = await anonUserSb.auth.setSession({
         access_token,
         refresh_token: refresh_token || "",
       });
+
       console.log(
-        "[auth updatePassword] step1 setSession error:",
-        setErr ? setErr.message : null
+        "[auth updatePassword] step1 anon.setSession error:",
+        anonSetErr ? anonSetErr.message : null
       );
+      let uid =
+        anonSetData?.session?.user?.id ??
+        anonSetData?.session?.user_id ??
+        null;
       console.log(
-        "[auth updatePassword] step1 setSession.user.id:",
-        setData?.session?.user?.id ?? null
+        "[auth updatePassword] step1 anon.setSession session.user?.id:",
+        uid
       );
 
-      const uid = setData?.session?.user?.id;
-      if (setErr || !uid) {
+      if (!anonSetErr && !uid) {
+        const { data: guData, error: guErr } = await anonUserSb.auth.getUser();
+        uid = guData?.user?.id ?? null;
+        console.log(
+          "[auth updatePassword] step1 anon.getUser（フォールバック） error:",
+          guErr ? guErr.message : null
+        );
+        console.log(
+          "[auth updatePassword] step1 anon.getUser user.id:",
+          uid
+        );
+      }
+
+      if (anonSetErr || !uid) {
         res.statusCode = 400;
         return res.end(
           JSON.stringify({
             error:
-              setErr?.message ||
+              anonSetErr?.message ||
               "セッションの確立に失敗しました。トークンの有効期限を確認してください。",
-            code: setErr?.code ?? undefined,
+            code: anonSetErr?.code ?? undefined,
             status:
-              typeof setErr?.status === "number" ? setErr.status : undefined,
+              typeof anonSetErr?.status === "number"
+                ? anonSetErr.status
+                : undefined,
           })
         );
       }
