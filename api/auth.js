@@ -155,12 +155,17 @@ async function handler(req, res) {
       let rallyLimit = RALLY_DAILY_LIMIT;
       let plan = null;
       let trial_expired = false;
+      let trial_days_remaining = null;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
         if (typeof r.limit === "number") rallyLimit = r.limit;
         plan = r.plan ?? null;
         trial_expired = Boolean(r.trial_expired);
+        trial_days_remaining =
+          typeof r.trial_days_remaining === "number"
+            ? r.trial_days_remaining
+            : null;
       } catch (err) {
         console.error("[auth GET] remaining:", err);
       }
@@ -175,6 +180,7 @@ async function handler(req, res) {
           limit: rallyLimit,
           plan,
           trial_expired,
+          trial_days_remaining,
           plan_selected: metaChoice.plan_selected,
           chosen_plan: metaChoice.chosen_plan,
         })
@@ -408,12 +414,17 @@ async function handler(req, res) {
         let rallyLimit = RALLY_DAILY_LIMIT;
         let plan = pNorm;
         let trial_expired = false;
+        let trial_days_remaining = null;
         try {
           const r = await getDailyRemaining(sbUser, user.id);
           remaining = r.remaining;
           if (typeof r.limit === "number") rallyLimit = r.limit;
           plan = r.plan ?? plan;
           trial_expired = Boolean(r.trial_expired);
+          trial_days_remaining =
+            typeof r.trial_days_remaining === "number"
+              ? r.trial_days_remaining
+              : null;
         } catch (e) {
           console.error("[auth startTrial] quota:", e);
         }
@@ -426,6 +437,7 @@ async function handler(req, res) {
             limit: rallyLimit,
             plan,
             trial_expired,
+            trial_days_remaining,
           })
         );
       }
@@ -505,12 +517,17 @@ async function handler(req, res) {
       let rallyLimit = RALLY_DAILY_LIMIT;
       let plan = null;
       let trial_expired = false;
+      let trial_days_remaining = null;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
         if (typeof r.limit === "number") rallyLimit = r.limit;
         plan = r.plan ?? null;
         trial_expired = Boolean(r.trial_expired);
+        trial_days_remaining =
+          typeof r.trial_days_remaining === "number"
+            ? r.trial_days_remaining
+            : null;
       } catch (e) {
         console.error("[auth startTrial] remaining:", e);
       }
@@ -523,6 +540,7 @@ async function handler(req, res) {
           limit: rallyLimit,
           plan,
           trial_expired,
+          trial_days_remaining,
         })
       );
     } catch (err) {
@@ -729,12 +747,17 @@ async function handler(req, res) {
     let rallyLimit = RALLY_DAILY_LIMIT;
     let plan = null;
     let trial_expired = false;
+    let trial_days_remaining = null;
     try {
       const r = await getDailyRemaining(sbUser, user.id);
       remaining = r.remaining;
       if (typeof r.limit === "number") rallyLimit = r.limit;
       plan = r.plan ?? null;
       trial_expired = Boolean(r.trial_expired);
+      trial_days_remaining =
+        typeof r.trial_days_remaining === "number"
+          ? r.trial_days_remaining
+          : null;
     } catch (e) {
       console.error("[auth signIn] remaining:", e);
     }
@@ -751,6 +774,7 @@ async function handler(req, res) {
         limit: rallyLimit,
         plan,
         trial_expired,
+        trial_days_remaining,
         plan_selected: metaChoice.plan_selected,
         chosen_plan: metaChoice.chosen_plan,
       })

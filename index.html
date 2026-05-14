@@ -17,7 +17,8 @@ header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(2
 #auth-screen.is-hidden{display:none}
 .logo{font-weight:600;font-size:1.25rem;letter-spacing:.04em}
 .subtitle{width:100%;margin-top:4px;font-size:.8125rem;color:var(--muted)}
-.rally-pill{font-size:.8125rem;color:var(--green-deep);background:var(--bubble);padding:6px 12px;border-radius:999px;white-space:nowrap}
+.rally-pill{font-size:.8125rem;color:var(--green-deep);background:var(--bubble);padding:6px 12px;border-radius:999px;white-space:nowrap;line-height:1.35}
+.rally-pill.rally-pill--warn{color:#c05621}
 main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 #chat-log{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 24px;max-width:560px;margin:0 auto;width:100%}
 .row{display:flex;margin-bottom:14px;align-items:flex-end}
@@ -226,7 +227,7 @@ var supabaseClient=null;
 var kokoroAuthInitPromise=null;
 var MSG_SNAP="kokoro_msgs_v1";
 var LIM=5,DBL=700;
-var remainCount=LIM;
+var remainCount=LIM;var trialDaysRemain=null;
 var registerMode=false,resetMode=false,passVisible=true,passVisibleUpd1=true,passVisibleUpd2=true;
 var recoveryAccessToken=null,recoveryRefreshToken=null,recoveryCode=null,updReturnTimer=null;
 var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログインして始められます。";
@@ -409,11 +410,11 @@ function initKokoroAuth(){
 function hideTrialEndedScreen(){var te=document.getElementById("trial-ended-screen");if(te){te.classList.add("auth-hide");te.setAttribute("aria-hidden","true")}}
 function showTrialEndedScreen(){closePlanChoiceModal();var te=document.getElementById("trial-ended-screen");if(te){te.classList.remove("auth-hide");te.setAttribute("aria-hidden","false")}authScreen.classList.add("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
 
-function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
+function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount,trialDaysRemain:trialDaysRemain};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
 
 function renderAllBubbles(){logEl.innerHTML="";var i,m;for(i=0;i<apiMsgs.length;i++){m=apiMsgs[i];if(m.role==="user")addBubble("user",m.content,false);else addBubble("ai",m.content,false)}scrollBot();refreshIosTtsOffersFromHistory()}
 
-function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)return false;var o=JSON.parse(raw);if(!o.userId||o.userId!==userId()||!Array.isArray(o.messages)||!o.messages.length)return false;apiMsgs=o.messages.slice();if(typeof o.remaining==="number")remainCount=o.remaining;renderAllBubbles();updRallyRemain(remainCount);return true}catch(e){return false}}
+function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)return false;var o=JSON.parse(raw);if(!o.userId||o.userId!==userId()||!Array.isArray(o.messages)||!o.messages.length)return false;apiMsgs=o.messages.slice();if(typeof o.remaining==="number")remainCount=o.remaining;if(Object.prototype.hasOwnProperty.call(o,"trialDaysRemain"))trialDaysRemain=(typeof o.trialDaysRemain==="number")?o.trialDaysRemain:null;renderAllBubbles();updRallyRemain(remainCount);return true}catch(e){return false}}
 
 function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();if(t)h.Authorization="Bearer "+t;return h}
 
@@ -442,7 +443,7 @@ function startFreeTrialAndChat(){
       .then(function(x){
         if(!x.res.ok)throw new Error((x.j&&x.j.error)||"トライアル開始に失敗しました");
         if(typeof x.j.limit==="number")LIM=x.j.limit;
-        if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+        patchRallyFromResponse(x.j);
         patchSession({billingPlan:x.j.plan!==undefined&&x.j.plan!==null?x.j.plan:null,trialExpired:!!x.j.trial_expired});
         closePlanChoiceModal();
         if(x.j.trial_expired===true){showTrialEndedScreen();return}
@@ -492,7 +493,7 @@ function bootstrapReturningUserPlanGate(lpPrefill){
         throw new Error("セッションの確認に失敗しました ("+x.res.status+")");
       }
       if(typeof x.j.limit==="number")LIM=x.j.limit;
-      if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+      patchRallyFromResponse(x.j);
       patchSession({billingPlan:x.j.plan!=null&&x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
       if(x.j.trial_expired===true){showTrialEndedScreen();return}
       if(!needsPlanChoiceModal(x.j.plan,x.j)){
@@ -584,7 +585,21 @@ function stripeCheckoutRedirect(planKey,opt){
 }
 
 function remain(){return remainCount}
-function updRallyRemain(r){if(typeof r==="number")remainCount=r;rallyEl.textContent="残り "+remainCount+" 回";if(remainCount<=0){inp.disabled=true;bSend.disabled=true;if(useWhisperMic){suppressMrTranscript=true;if(mrRecorder&&mrRecorder.state==="recording"){try{mrRecorder.stop()}catch(e){}}cleanupMicTracks();mrRecorder=null;mrChunks=[];recOn=false;whisperSending=false}else if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.disabled=true;bMic.classList.remove("recording");limEl.textContent="本日の上限回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;limEl.classList.remove("visible");limEl.textContent="";var blockComposer=sending||typewriterBusy;if(blockComposer)bSend.disabled=true;else bSend.disabled=!inp.value.trim()}syncMicButtonEnabled()}
+function patchRallyFromResponse(j){
+  if(!j||typeof j!=="object"||typeof j.remaining!=="number")return;
+  if(Object.prototype.hasOwnProperty.call(j,"trial_days_remaining"))updRallyRemain(j.remaining,(typeof j.trial_days_remaining==="number")?j.trial_days_remaining:null);
+  else updRallyRemain(j.remaining);
+}
+function updRallyRemain(r,trialDays){
+  if(typeof r==="number")remainCount=r;
+  if(arguments.length>=2)trialDaysRemain=(typeof trialDays==="number")?trialDays:null;
+  var txt="残り "+remainCount+" 回";
+  if(typeof trialDaysRemain==="number")txt+=" ｜ 残り "+trialDaysRemain+" 日";
+  rallyEl.textContent=txt;
+  var lowRemain=remainCount<=1;
+  var lowDays=(typeof trialDaysRemain==="number"&&trialDaysRemain<=2);
+  rallyEl.classList.toggle("rally-pill--warn",lowRemain||lowDays);
+  if(remainCount<=0){inp.disabled=true;bSend.disabled=true;if(useWhisperMic){suppressMrTranscript=true;if(mrRecorder&&mrRecorder.state==="recording"){try{mrRecorder.stop()}catch(e){}}cleanupMicTracks();mrRecorder=null;mrChunks=[];recOn=false;whisperSending=false}else if(recOn&&reco){try{reco.stop()}catch(e){}}bMic.disabled=true;bMic.classList.remove("recording");limEl.textContent="本日の上限回数に達しました";limEl.classList.add("visible")}else{inp.disabled=false;limEl.classList.remove("visible");limEl.textContent="";var blockComposer=sending||typewriterBusy;if(blockComposer)bSend.disabled=true;else bSend.disabled=!inp.value.trim()}syncMicButtonEnabled()}
 
 function showAuthView(){
   hideTrialEndedScreen();
@@ -922,6 +937,7 @@ function initFromServer(){
       if(x.res.status===403&&x.j&&x.j.trial_expired===true){
         patchSession({trialExpired:true});
         if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
+        patchRallyFromResponse(x.j);
         showTrialEndedScreen();
         return;
       }
@@ -931,7 +947,7 @@ function initFromServer(){
       logEl.innerHTML="";
       addBubble("user",opener.content,false);
       persistSnapshot();
-      if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+      patchRallyFromResponse(x.j);
       if(typeof x.j.limit==="number")LIM=x.j.limit;
       addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));if(ttsOn)scheduleAssistantTts(msg,aiRow)});
     })
@@ -959,7 +975,7 @@ function submitAuth(){
         var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user,billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired};
         setSession(sess);
         if(typeof x.j.limit==="number")LIM=x.j.limit;
-        if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+        patchRallyFromResponse(x.j);
         authPass.value="";
         var afterLogin=function(){
           if(x.j.trial_expired===true){closePlanChoiceModal();showTrialEndedScreen();return}
@@ -988,7 +1004,7 @@ authPassEye.addEventListener("click",function(){passVisible=!passVisible;applyPa
 var btnPlanPortal=document.getElementById("btn-plan-portal");
 if(btnPlanPortal)btnPlanPortal.addEventListener("click",function(){openBillingPortal()})
 else{console.error("[kokoro] btn-plan-portal が見つかりません")}
-btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM)});
+btnLogout.addEventListener("click",function(){clearSessionAll();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;trialDaysRemain=null;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM,null)});
 planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
 planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
 planFreeTrialBtn.addEventListener("click",function(){planModalStripeErr("");startFreeTrialAndChat()});
@@ -1003,7 +1019,7 @@ function tryResumeSession(){var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
   .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j};})})
   .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
-    if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);
+    patchRallyFromResponse(x.j);
     patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
     if(x.j.trial_expired===true){showTrialEndedScreen();return}
     if(needsPlanChoiceModal(x.j.plan,x.j)){showAuthView();syncAuthUi();openPlanChoiceModal(parsePlanQuery());return}
@@ -1032,6 +1048,7 @@ function send(){
       if(x.res.status===403&&x.j&&x.j.trial_expired===true){
         patchSession({trialExpired:true});
         if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
+        patchRallyFromResponse(x.j);
         apiMsgs.pop();
         var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();
         inp.value=t;
@@ -1039,7 +1056,7 @@ function send(){
         return;
       }
       if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}
-      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");if(typeof x.j.remaining==="number")updRallyRemain(x.j.remaining);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRow)});
+      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");patchRallyFromResponse(x.j);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRow)});
     })
     .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",translateErrorToJa(m),true);if(e&&e._status===429)updRallyRemain(0)})
     .finally(function(){sending=false;updRallyRemain(remainCount)});

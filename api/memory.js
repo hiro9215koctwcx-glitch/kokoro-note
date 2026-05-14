@@ -148,6 +148,24 @@ export function computeTrialExpired(planNorm, trialStartRaw) {
   return todayYmd >= firstBlockedYmd;
 }
 
+/**
+ * トライアル中のみ。開始日を含む 7 暦日のうち「今日を含め残り何日使えるか」。
+ * 期限切れ後は 0。plan が trial 以外、または開始日不明は null。
+ */
+export function computeTrialDaysRemaining(planNorm, trialStartRaw) {
+  if (planNorm !== "trial") return null;
+  const startYmd = trialStartDateToYmd(trialStartRaw);
+  if (!startYmd) return null;
+  const { ymd: todayYmd } = jstDateParts();
+  const firstBlockedYmd = addCalendarDaysToYmd(startYmd, 7);
+  if (todayYmd >= firstBlockedYmd) return 0;
+  const lastTrialYmd = addCalendarDaysToYmd(startYmd, 6);
+  const t0 = new Date(`${todayYmd}T12:00:00+09:00`).getTime();
+  const t1 = new Date(`${lastTrialYmd}T12:00:00+09:00`).getTime();
+  const diff = Math.round((t1 - t0) / (24 * 60 * 60 * 1000));
+  return Math.max(0, diff) + 1;
+}
+
 async function fetchUserPlanTrialFromUsers(sb, userId) {
   let metaTrialYmd = null;
   try {
@@ -180,7 +198,11 @@ async function fetchUserPlanTrialFromUsers(sb, userId) {
   const dbStart = data?.trial_start_date;
   const trialStartForExpiry = metaTrialYmd || dbStart;
   const trial_expired = computeTrialExpired(planNorm, trialStartForExpiry);
-  return { planNorm, trial_expired };
+  const trial_days_remaining = computeTrialDaysRemaining(
+    planNorm,
+    trialStartForExpiry
+  );
+  return { planNorm, trial_expired, trial_days_remaining };
 }
 
 export async function getUserPlan(sb, userId) {
@@ -238,10 +260,8 @@ export async function insertConversationRows(sb, userId, rows) {
 }
 
 export async function getDailyRemaining(sb, userId) {
-  const { planNorm, trial_expired } = await fetchUserPlanTrialFromUsers(
-    sb,
-    userId
-  );
+  const { planNorm, trial_expired, trial_days_remaining } =
+    await fetchUserPlanTrialFromUsers(sb, userId);
   const limit = dailyLimitFromPlan(planNorm);
   const { ymd } = jstDateParts();
   const { data, error } = await sb
@@ -264,6 +284,7 @@ export async function getDailyRemaining(sb, userId) {
     limit,
     plan: planNorm,
     trial_expired,
+    trial_days_remaining,
   };
 }
 

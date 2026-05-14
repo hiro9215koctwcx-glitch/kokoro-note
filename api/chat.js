@@ -240,10 +240,14 @@ async function handler(req, res) {
 
   let remainingBefore;
   let rallyLimit = RALLY_DAILY_LIMIT;
+  let trialDaysRemaining = null;
   try {
     const r = await getDailyRemaining(sb, user.id);
     remainingBefore = r.remaining;
     if (typeof r.limit === "number") rallyLimit = r.limit;
+    if (typeof r.trial_days_remaining === "number") {
+      trialDaysRemaining = r.trial_days_remaining;
+    }
     if (r.trial_expired) {
       return json(res, 403, {
         error:
@@ -251,6 +255,7 @@ async function handler(req, res) {
         trial_expired: true,
         remaining: r.remaining ?? 0,
         limit: rallyLimit,
+        trial_days_remaining: trialDaysRemaining,
       });
     }
   } catch (err) {
@@ -263,6 +268,7 @@ async function handler(req, res) {
       error: "本日の上限回数に達しました。",
       remaining: 0,
       limit: rallyLimit,
+      trial_days_remaining: trialDaysRemaining,
     });
   }
 
@@ -321,6 +327,7 @@ async function handler(req, res) {
       message,
       remaining: remainingAfter,
       limit: responseLimit,
+      trial_days_remaining: trialDaysRemaining,
       saveOk,
     });
   } catch (err) {
