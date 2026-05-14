@@ -7,6 +7,8 @@
  * - signUp: Supabase.auth.admin.generateLink(signup)+Resendで確認メール（RESEND_API_KEY・SUPABASE_SERVICE_ROLE_KEY が必要）。
  * POST ?action=resetPassword JSON: { "email" }
  * POST ?action=updatePassword JSON: { "password", "access_token"|"refresh_token"|"code" }
+ *   … recovery の access_token を検証後、SUPABASE_SERVICE_ROLE_KEY があれば admin でパスワードのみ更新。
+ *     それ以外・失敗時は従来どおり匿名クライアントで setSession + updateUser。
  * GET ?bootstrap=1 → { supabase_url, supabase_anon_key }（ブラウザ用・認証不要）
  * GET: Authorization: Bearer <access_token> → ユーザー確認 + remaining + trial_expired + plan_selected / chosen_plan（user_metadata）
  */
@@ -100,6 +102,26 @@ function absolutizeSupabaseVerifyLink(link, supabaseOrigin) {
   const base = String(supabaseOrigin || "").replace(/\/$/, "");
   if (!base) return s;
   return s.startsWith("/") ? `${base}${s}` : `${base}/${s}`;
+}
+
+/** Vercel 等で req.body が Buffer になることがあるため、文字列オブジェクト両対応で JSON を得る */
+function parseJsonBodyLoose(req) {
+  const raw = req.body;
+  if (raw === undefined || raw === null || raw === "") return {};
+  if (
+    typeof Buffer !== "undefined" &&
+    Buffer.isBuffer &&
+    Buffer.isBuffer(raw)
+  ) {
+    return raw.length ? JSON.parse(raw.toString("utf8")) : {};
+  }
+  if (typeof raw === "string") {
+    return JSON.parse(raw || "{}");
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw;
+  }
+  return {};
 }
 
 async function handler(req, res) {
@@ -199,8 +221,7 @@ async function handler(req, res) {
 
   let body = {};
   try {
-    if (typeof req.body === "string") body = JSON.parse(req.body || "{}");
-    else if (req.body && typeof req.body === "object") body = req.body;
+    body = parseJsonBodyLoose(req);
   } catch {
     res.statusCode = 400;
     return res.end(JSON.stringify({ error: "JSONの形式が正しくありません。" }));
@@ -322,6 +343,67 @@ async function handler(req, res) {
               "access_token と refresh_token、または OAuth/PKCE 用の code が必要です。",
           })
         );
+      }
+
+      /** 復旧JWTを検証し、サービスロールでパスワードのみ更新（setSession を経由しない） */
+      const serviceRole = (
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        ""
+      ).trim();
+      if (serviceRole) {
+        const verifySb = createClient(url, anon, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        });
+        try {
+          const { data: gud, error: guErr } =
+            await verifySb.auth.getUser(access_token);
+
+          const uid = gud?.user?.id;
+          if (!guErr && uid) {
+            const srvSb = createClient(url, serviceRole, {
+              auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false,
+              },
+            });
+            const { error: adErr } = await srvSb.auth.admin.updateUserById(uid, {
+              password,
+            });
+
+            if (!adErr) {
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ success: true }));
+            }
+
+            console.error(
+              "[auth updatePassword admin.updateUserById]",
+              adErr.message || String(adErr)
+            );
+            res.statusCode = 400;
+            return res.end(
+              JSON.stringify({
+                error: adErr.message || String(adErr),
+                code: adErr.code ?? undefined,
+                status:
+                  typeof adErr.status === "number" ? adErr.status : undefined,
+              })
+            );
+          }
+
+          console.warn(
+            "[auth updatePassword getUser]",
+            guErr?.message ||
+              (guErr ? String(guErr) : "user id が取得できませんでした"),
+            "— setSession にフォールバックします。"
+          );
+        } catch (e) {
+          console.error("[auth updatePassword admin path]", e);
+        }
       }
 
       const { error: setErr } = await sessionSb.auth.setSession({
