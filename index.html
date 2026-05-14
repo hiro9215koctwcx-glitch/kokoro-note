@@ -376,6 +376,31 @@ function persistSupabaseSession(access_token,refresh_token){
 /** createClient より前に同期的に読む。redirect の type=recovery（復旧リンク）のみ */
 function extractRecoveryParamsFromLocation(){try{var h=(window.location.hash||"").replace(/^#/,""),qRaw=window.location.search||"",spH=new URLSearchParams(h),spQ=new URLSearchParams(qRaw.charAt(0)==="?"?qRaw.slice(1):qRaw),tp=String(spH.get("type")||spQ.get("type")||"").trim().toLowerCase();if(tp!=="recovery")return null;var at=spH.get("access_token")||spQ.get("access_token")||null,rf=spH.get("refresh_token")||spQ.get("refresh_token")||null,co=spQ.get("code")||spH.get("code")||null;if(!(at||co))return null;return{access_token:at,refresh_token:rf,code:co,type:"recovery"}}catch(e){return null}}
 function exitPasswordRecoveryGate(){passwordRecoveryUiActive=false;blockKokoroMergeFromSupabase=false}
+/** PKCE復旧リンクの読み込み時エラー → 設定画面へ（入力はブロック状態で文言表示） */
+function showRecoveryBootstrapError(rawMsg){passwordRecoveryUiActive=true;blockKokoroMergeFromSupabase=true;hideTrialEndedScreen();authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();updErrShow(translateErrorToJa(rawMsg)||"リンクからセッションを取得できませんでした。パスワードリセットをやり直してください。");recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;stripAuthFromUrl()}
+/** type=recovery + access_token: implicit。type=recovery + code のみ: exchangeCodeForSession 後トークルのみ渡す */
+function bootstrapRecoverySessionFromUrl(snap,gotSession){
+  if(passwordRecoveryUiActive)return Promise.resolve(true);
+  if(!snap||snap.type!=="recovery")return Promise.resolve(false);
+  function hasTok(sess){return sess&&sess.access_token}
+  function finish(sess){if(!hasTok(sess))return false;enterRecoveryPasswordFlow({access_token:sess.access_token,refresh_token:sess.refresh_token||"",code:null,type:"recovery"});stripAuthFromUrl();return true}
+  if(snap.access_token)return Promise.resolve(finish({access_token:snap.access_token,refresh_token:snap.refresh_token||""}));
+  var st=gotSession&&hasTok(gotSession)?gotSession:null;
+  if(st)return Promise.resolve(finish(st));
+  if(snap.code){
+    return supabaseClient.auth.exchangeCodeForSession(snap.code).then(function(ex){
+      if(ex.data&&ex.data.session&&finish(ex.data.session))return true;
+      return supabaseClient.auth.getSession().then(function(g2){
+        var s2=g2.data&&g2.data.session;
+        if(finish(s2))return true;
+        logErr("[recovery exchange]",ex.error);
+        showRecoveryBootstrapError(ex.error&&(ex.error.message||String(ex.error))||"");
+        return true;
+      });
+    });
+  }
+  return Promise.resolve(false);
+}
 function importSupabaseEsm(){
   return import("https://esm.sh/@supabase/supabase-js@2.49.1").catch(function(){
     return import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm");
@@ -416,13 +441,15 @@ function initKokoroAuth(){
           }
           if(evt==="INITIAL_SESSION"){
             if(recoveryUrlSnap&&recoveryUrlSnap.type==="recovery"&&session&&!passwordRecoveryUiActive){
-              enterRecoveryPasswordFlow({
-                access_token:recoveryUrlSnap.access_token||session.access_token,
-                refresh_token:recoveryUrlSnap.refresh_token||session.refresh_token,
-                code:recoveryUrlSnap.code||null,
-                type:"recovery"
-              });
-              stripAuthFromUrl();
+              if(session.access_token||recoveryUrlSnap.access_token){
+                enterRecoveryPasswordFlow({
+                  access_token:recoveryUrlSnap.access_token||session.access_token,
+                  refresh_token:recoveryUrlSnap.refresh_token||session.refresh_token||"",
+                  code:null,
+                  type:"recovery"
+                });
+                stripAuthFromUrl();
+              }
               return;
             }
             if(session&&!blockKokoroMergeFromSupabase&&!passwordRecoveryUiActive)mergeAppSessionFromSupabase(session);
@@ -436,17 +463,11 @@ function initKokoroAuth(){
         if(passwordRecoveryUiActive)return;
         var s=gs.data&&gs.data.session;
         if(recoveryUrlSnap&&recoveryUrlSnap.type==="recovery"){
-          var pay={
-            access_token:recoveryUrlSnap.access_token||(s&&s.access_token)||null,
-            refresh_token:recoveryUrlSnap.refresh_token||(s&&s.refresh_token)||null,
-            code:recoveryUrlSnap.code||null,
-            type:"recovery"
-          };
-          if(pay.access_token||pay.code){
-            enterRecoveryPasswordFlow(pay);
-            stripAuthFromUrl();
-            return;
-          }
+          return bootstrapRecoverySessionFromUrl(recoveryUrlSnap,s).then(function(handled){
+            if(passwordRecoveryUiActive)return;
+            if(handled)return;
+            if(s&&!blockKokoroMergeFromSupabase&&!passwordRecoveryUiActive)mergeAppSessionFromSupabase(s);
+          });
         }
         if(s&&!blockKokoroMergeFromSupabase&&!passwordRecoveryUiActive)mergeAppSessionFromSupabase(s);
       });
@@ -1143,7 +1164,8 @@ function runAppBootstrap(){
       recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;
       showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessShow("メール認証が完了しました。ログインしてください。");stripAuthFromUrl()
     }else if(recParse.type==="recovery"){
-      enterRecoveryPasswordFlow(recParse)
+      if(supabaseClient)bootstrapRecoverySessionFromUrl(recParse,null).catch(function(e){logErr("[runAppBootstrap recovery]",e)});
+      else if(recParse.access_token)enterRecoveryPasswordFlow({access_token:recParse.access_token,refresh_token:recParse.refresh_token||"",code:null,type:"recovery"});
     }
   }else{
     recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;var lp=parsePlanQuery();if(lp){if(getTok()){bootstrapReturningUserPlanGate(lp)}else{showAuthView();syncAuthUi()}}else{syncAuthUi();tryResumeSession()}
