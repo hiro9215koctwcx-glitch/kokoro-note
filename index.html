@@ -175,8 +175,28 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .btn-plan-primary{width:100%;padding:13px;border:none;border-radius:14px;background:var(--green);color:#fff;font-family:inherit;font-weight:600;font-size:.9375rem;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 14px rgba(109,133,118,.35)}
 .btn-plan-primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 .btn-plan-outline{width:100%;padding:12px;border-radius:14px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer}
-#main-app{display:none;flex-direction:column;flex:1;min-height:0}
+#main-app{display:none;flex-direction:column;flex:1;min-height:0;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);color:#fff}
 #main-app.is-visible{display:flex}
+#main-app > header{background:rgba(15,23,42,.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.1);color:#fff}
+#main-app .logo{color:#fff}
+#main-app .subtitle{color:rgba(255,255,255,.72)}
+#main-app .rally-pill{background:rgba(255,255,255,.1);color:#fff}
+#main-app .rally-pill.rally-pill--warn{color:#fbbf24}
+#main-app .btn-logout{background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;box-shadow:none}
+#main-app .row.user .bubble{background:rgba(255,255,255,.1);color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+#main-app .row.ai .bubble{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1);border-bottom-left-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+#main-app .composer-area{background:rgba(15,23,42,.35);border-top:1px solid rgba(255,255,255,.1);box-shadow:0 -4px 24px rgba(0,0,0,.2)}
+#main-app #message-input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff}
+#main-app #message-input::placeholder{color:rgba(255,255,255,.4)}
+#main-app #message-input:focus{outline:2px solid rgba(255,255,255,.35)}
+#main-app #message-input:disabled{background:rgba(255,255,255,.05);color:rgba(255,255,255,.45)}
+#main-app .btn-icon{background:rgba(255,255,255,.1);color:#fff;box-shadow:none}
+#main-app .btn-icon.tts-on{background:rgba(255,255,255,.1)}
+#main-app .btn-icon.mic.recording{background:var(--danger);color:#fff}
+#main-app .composer-hints-strip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.78)}
+#main-app .composer-hints-strip .mic-usage-hint,#main-app .composer-hints-strip .voice-hints-note p{color:rgba(255,255,255,.72)}
+#main-app .hint{color:rgba(255,255,255,.68)}
+#main-app .limit-note{color:rgba(255,255,255,.72)}
 </style>
 </head>
 <body>
