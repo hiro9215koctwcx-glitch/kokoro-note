@@ -188,6 +188,13 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 #main-app .btn-logout{background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;box-shadow:none}
 #main-app .row.user .bubble{background:rgba(99,130,100,.4);color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.2)}
 #main-app .row.ai .bubble{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1);border-bottom-left-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+#main-app .bubble.kokoro-thinking{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+#main-app .kokoro-thinking-line{font-size:.9375rem;line-height:1.65;color:inherit;font-weight:inherit}
+#main-app .kokoro-thinking-dots{display:inline-flex;align-items:center;gap:6px;padding-top:2px;line-height:0}
+#main-app .kokoro-thinking-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.28;vertical-align:middle;animation:kokoroThinkingPulse 1.05s ease-in-out infinite}
+#main-app .kokoro-thinking-dot:nth-child(2){animation-delay:.2s}
+#main-app .kokoro-thinking-dot:nth-child(3){animation-delay:.4s}
+@keyframes kokoroThinkingPulse{0%,80%,100%{opacity:.28;transform:scale(1)}40%{opacity:1;transform:scale(1.12)}}
 #main-app .composer-area{background:rgba(15,23,42,.35);border-top:1px solid rgba(255,255,255,.1);box-shadow:0 -4px 24px rgba(0,0,0,.2)}
 #main-app #message-input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff}
 #main-app #message-input::placeholder{color:rgba(255,255,255,.4)}
@@ -313,7 +320,7 @@ var passwordRecoveryUiActive=false,blockKokoroMergeFromSupabase=false;
 var LEAD_HTML_DEFAULT="5分で気持ちを整えるAI<br />メールでログインして始められます。";
 var MSG_RESET_LEAD="登録済みのメールアドレスへ、パスワード再設定用のリンクをお送りします。";
 var SpeechRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition;
-var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,micHintTimer=null,micOk=!!SpeechRecognitionCtor;
+var apiMsgs=[],ttsOn=true,lastEnt=0,aud=null,reco=null,recOn=false,sending=false,thinkingRowEl=null,micHintTimer=null,micOk=!!SpeechRecognitionCtor;
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
 var typewriterBusy=false;var typewriterState=null;
 var suppressMrTranscript=false,whisperSending=false,mrStream=null,mrRecorder=null,mrChunks=[],mrMime="",micFallbackInput=null;
@@ -831,6 +838,8 @@ function finalizePageLeaveAssistant(){finalizeTypewriterIfNeeded();finalizeIosLi
 function addAiBubbleTypewriter(fullRaw,onDone){var row=document.createElement("div");row.className="row ai";var b=document.createElement("div");b.className="bubble";row.appendChild(b);logEl.appendChild(row);scrollBot();var plain=markdownToPlainForTypewriter(fullRaw);lockTypewriterComposer();var st={bubble:b,fullRaw:fullRaw,row:row,timer:null};typewriterState=st;function finish(){if(typewriterState!==st)return;try{b.innerHTML=formatAiBubbleHtml(fullRaw)}catch(e){}releaseTypewriterAfterTypewriterDone();scrollBot();if(onDone)onDone(row)}if(!plain.length){finish();return}var idx=0;function tick(){if(typewriterState!==st)return;idx++;if(idx>plain.length){finish();return}b.innerHTML=escapeHtml(plain.slice(0,idx)).replace(/\n/g,"<br>");scrollBot();st.timer=setTimeout(tick,32+Math.floor(Math.random()*9))}st.timer=setTimeout(tick,0)}
 function stripMarkdownForSpeech(raw){var s=String(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"$1");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1$2");return s.replace(/\*+/g," ").replace(/\s+/g," ").trim()}
 function addBubble(role,text,err){var row=document.createElement("div");row.className="row "+(role==="user"?"user":"ai");var b=document.createElement("div");b.className="bubble"+(err?" err":"");if(!err&&role==="ai"){b.innerHTML=formatAiBubbleHtml(text)}else{b.textContent=text}row.appendChild(b);logEl.appendChild(row);scrollBot();return row}
+function kokoroRemoveThinkingRow(){if(!thinkingRowEl)return;try{if(thinkingRowEl.parentNode)thinkingRowEl.parentNode.removeChild(thinkingRowEl)}catch(eRm){}thinkingRowEl=null}
+function kokoroShowThinkingRow(){kokoroRemoveThinkingRow();var row=document.createElement("div");row.className="row ai";row.setAttribute("aria-live","polite");row.setAttribute("aria-busy","true");var b=document.createElement("div");b.className="bubble kokoro-thinking";var line=document.createElement("span");line.className="kokoro-thinking-line";line.textContent="気持ちを受け取っています";var dots=document.createElement("span");dots.className="kokoro-thinking-dots";var i,d;for(i=0;i<3;i++){d=document.createElement("span");d.className="kokoro-thinking-dot";dots.appendChild(d)}b.appendChild(line);b.appendChild(dots);row.appendChild(b);logEl.appendChild(row);thinkingRowEl=row;scrollBot()}
 function hidePcTtsStopBtn(){if(bTtsStop)bTtsStop.classList.add("auth-hide")}
 function showPcTtsStopBtn(){if(bTtsStop)bTtsStop.classList.remove("auth-hide")}
 function revokeKokoroTtsBlobUrl(audioEl){if(!audioEl||!audioEl._kokoroTtsBlobUrl)return;try{URL.revokeObjectURL(audioEl._kokoroTtsBlobUrl)}catch(e){}audioEl._kokoroTtsBlobUrl=null}
@@ -1074,11 +1083,13 @@ function playAssistantTTS(t,iosUi){
 function initFromServer(){
   sending=true;
   bSend.disabled=true;
+  kokoroShowThinkingRow();
   var opener={role:"user",content:"今日の振り返りを始めたいです。よろしくお願いします。"};
   fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({init:true,messages:[opener]})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
     .then(function(x){
       if(x.res.status===403&&x.j&&x.j.trial_expired===true){
+        kokoroRemoveThinkingRow();
         patchSession({trialExpired:true});
         if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
         patchRallyFromResponse(x.j);
@@ -1087,6 +1098,7 @@ function initFromServer(){
       }
       if(!x.res.ok){throw new Error(String((x.j&&x.j.error)||"[chat-init] "+x.res.status));}
       var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
+      kokoroRemoveThinkingRow();
       apiMsgs=[opener,{role:"assistant",content:msg}];
       logEl.innerHTML="";
       addBubble("user",opener.content,false);
@@ -1095,7 +1107,7 @@ function initFromServer(){
       if(typeof x.j.limit==="number")LIM=x.j.limit;
       addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));if(ttsOn)scheduleAssistantTts(msg,aiRow)});
     })
-    .catch(function(e){logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",translateErrorToJa((e&&e.message)?e.message:fb),true)})
+    .catch(function(e){kokoroRemoveThinkingRow();logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",translateErrorToJa((e&&e.message)?e.message:fb),true)})
     .finally(function(){sending=false;updRallyRemain(remainCount);if(!typewriterBusy)try{inp.focus()}catch(z){}});
 }
 
@@ -1186,10 +1198,12 @@ function send(){
   updRallyRemain(remainCount);
   addBubble("user",t);
   apiMsgs.push({role:"user",content:t});
+  kokoroShowThinkingRow();
   fetch(resolveApi("api/chat"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({messages:apiMsgs})})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j}})})
     .then(function(x){
       if(x.res.status===403&&x.j&&x.j.trial_expired===true){
+        kokoroRemoveThinkingRow();
         patchSession({trialExpired:true});
         if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
         patchRallyFromResponse(x.j);
@@ -1200,9 +1214,9 @@ function send(){
         return;
       }
       if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}
-      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");patchRallyFromResponse(x.j);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRow)});
+      var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");kokoroRemoveThinkingRow();patchRallyFromResponse(x.j);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRow)});
     })
-    .catch(function(e){apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",translateErrorToJa(m),true);if(e&&e._status===429)updRallyRemain(0)})
+    .catch(function(e){kokoroRemoveThinkingRow();apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",translateErrorToJa(m),true);if(e&&e._status===429)updRallyRemain(0)})
     .finally(function(){sending=false;updRallyRemain(remainCount)});
 }
 
