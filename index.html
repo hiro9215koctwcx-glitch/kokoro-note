@@ -206,6 +206,10 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 #main-app .kokoro-mic-wave-bar:nth-child(4){animation-delay:.3s}
 #main-app .kokoro-mic-wave-bar:nth-child(5){animation-delay:.4s}
 @keyframes kokoroMicWave{0%{transform:scaleY(.22);opacity:.5}100%{transform:scaleY(1);opacity:1}}
+#main-app .kokoro-tts-prep-hint{display:block;margin:8px auto 0;padding:0;font-size:.6875rem;font-weight:500;line-height:1.45;text-align:center;width:100%;color:#6b8f71;opacity:0;max-width:260px}
+#main-app .kokoro-tts-prep-hint.auth-hide{display:none!important}
+#main-app .kokoro-tts-prep-hint.kokoro-tts-prep-on{animation:kokoroTtsPrepIn .42s ease forwards}
+@keyframes kokoroTtsPrepIn{from{opacity:0}to{opacity:1}}
 #main-app .composer-area{background:rgba(15,23,42,.35);border-top:1px solid rgba(255,255,255,.1);box-shadow:0 -4px 24px rgba(0,0,0,.2)}
 #main-app #message-input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff}
 #main-app #message-input::placeholder{color:rgba(255,255,255,.4)}
@@ -926,6 +930,7 @@ function playIosAssistantTTS(t,iosUi){
         aud=null;
         try{audio.onended=null}catch(eNe){}
         try{iosUi.abortPlayback=null}catch(eAb2){}
+        kokoroIosTtsPrepHide(iosUi);
         console.error("iOS再生エラー",audio.error||"Audio error");
         restoreIosTtsPlayIdle(iosUi);
       });
@@ -937,9 +942,11 @@ function playIosAssistantTTS(t,iosUi){
         iosUi.abortPlayback=null;
         try{iosUi.stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)}catch(eR){}
       };
+      audio.addEventListener("playing",function kokoroIosPrepDismiss(){audio.removeEventListener("playing",kokoroIosPrepDismiss);kokoroIosTtsPrepHide(iosUi)},{once:true});
       return audio.play().catch(function(playErr){
         try{audio.onended=null}catch(eOe2){}
         console.error("iOS再生エラー",playErr);
+        kokoroIosTtsPrepHide(iosUi);
         revokeKokoroTtsBlobUrl(audio);
         aud=null;
         try{iosUi.abortPlayback=null}catch(eAb3){}
@@ -948,6 +955,7 @@ function playIosAssistantTTS(t,iosUi){
     })
     .catch(function(err){
       console.error("iOS TTS",err);
+      kokoroIosTtsPrepHide(iosUi);
       try{iosUi.abortPlayback=null}catch(y){}
       restoreIosTtsPlayIdle(iosUi);
     });
@@ -959,7 +967,9 @@ function primeAudioPlayback(){if(ttsPrimed)return;try{var AC=window.AudioContext
 function removeIosTtsOfferRows(){var n=logEl.querySelectorAll(".tts-ios-offer-row"),i;for(i=0;i<n.length;i++){try{n[i].remove()}catch(e){}}}
 function resolveLastAiBubbleRow(){var els=logEl.querySelectorAll(".row.ai");var i,b;for(i=els.length-1;i>=0;i--){b=els[i].querySelector(".bubble");if(b&&!b.classList.contains("err"))return els[i]}return null}
 function peekLastAssistantText(){var i,m;for(i=apiMsgs.length-1;i>=0;i--){m=apiMsgs[i];if(m&&m.role==="assistant"&&typeof m.content==="string"&&String(m.content).trim())return m.content}return""}
-function restoreIosTtsPlayIdle(iosUi){if(!iosUi)return;try{if(iosUi.playBtn){iosUi.playBtn.disabled=false;iosUi.playBtn.classList.remove("auth-hide");iosUi.playBtn.textContent=iosUi.defaultPlayLabel}if(iosUi.stopBtn)iosUi.stopBtn.classList.add("auth-hide")}catch(e){}}
+function kokoroIosTtsPrepHide(iosUi){if(!iosUi||!iosUi.prepHint)return;iosUi.prepHint.classList.remove("kokoro-tts-prep-on");iosUi.prepHint.classList.add("auth-hide")}
+function kokoroIosTtsPrepShow(iosUi){if(!iosUi||!iosUi.prepHint)return;kokoroIosTtsPrepHide(iosUi);iosUi.prepHint.classList.remove("auth-hide");try{void iosUi.prepHint.offsetWidth}catch(eOff){};iosUi.prepHint.classList.add("kokoro-tts-prep-on")}
+function restoreIosTtsPlayIdle(iosUi){if(!iosUi)return;kokoroIosTtsPrepHide(iosUi);try{if(iosUi.playBtn){iosUi.playBtn.disabled=false;iosUi.playBtn.classList.remove("auth-hide");iosUi.playBtn.textContent=iosUi.defaultPlayLabel}if(iosUi.stopBtn)iosUi.stopBtn.classList.add("auth-hide")}catch(e){}}
 function hideIosTtsOfferAfterDone(iosUi){if(!iosUi||!iosUi.wrap)return;try{iosUi.wrap.classList.add("auth-hide")}catch(e){}}
 function attachIosTtsListenButton(aiMsgRow,text){
   if(!text)return;
@@ -987,10 +997,15 @@ function attachIosTtsListenButton(aiMsgRow,text){
   ctrl.appendChild(playBtn);
   ctrl.appendChild(stopBtn);
   inner.appendChild(ctrl);
+  var prepHint=document.createElement("p");
+  prepHint.className="kokoro-tts-prep-hint auth-hide";
+  prepHint.setAttribute("aria-live","polite");
+  prepHint.textContent="🔊 音声を準備しています...";
+  inner.appendChild(prepHint);
   wrap.appendChild(inner);
   aiMsgRow.after(wrap);
-  var iosUi={playBtn:playBtn,stopBtn:stopBtn,wrap:wrap,defaultPlayLabel:defaultPlayLabel,abortPlayback:null};
-  playBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(playBtn.disabled)return;primeAudioPlayback();playBtn.disabled=true;playBtn.textContent="音声を準備中...";requestAnimationFrame(function(){requestAnimationFrame(function(){playIosAssistantTTS(text,iosUi)})})},false);
+  var iosUi={playBtn:playBtn,stopBtn:stopBtn,wrap:wrap,defaultPlayLabel:defaultPlayLabel,abortPlayback:null,prepHint:prepHint};
+  playBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(playBtn.disabled)return;primeAudioPlayback();playBtn.disabled=true;kokoroIosTtsPrepShow(iosUi);requestAnimationFrame(function(){requestAnimationFrame(function(){playIosAssistantTTS(text,iosUi)})})},false);
   stopBtn.addEventListener("click",function(ev){try{ev.preventDefault()}catch(eIg){};if(typeof iosUi.abortPlayback==="function"){try{iosUi.abortPlayback()}catch(eAb){}iosUi.abortPlayback=null}try{if(aud){revokeKokoroTtsBlobUrl(aud);aud.pause();try{aud.currentTime=0}catch(eT){};aud.src=""}}catch(eA){}aud=null;stopBtn.classList.add("auth-hide");restoreIosTtsPlayIdle(iosUi)},false);
 }
 function refreshIosTtsOffersFromHistory(){if(!isIOS)return;removeIosTtsOfferRows();if(!ttsOn)return;var px=peekLastAssistantText();var tgt=resolveLastAiBubbleRow();if(px&&tgt)attachIosTtsListenButton(tgt,px)}
