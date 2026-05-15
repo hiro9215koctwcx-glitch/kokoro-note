@@ -288,41 +288,99 @@ export async function getDailyRemaining(sb, userId) {
   };
 }
 
-/** カウントを1増やし、その後の remaining を返す。limit は省略時に users.plan を再取得します。 */
+/**
+ * カウントを 1 増やし、その後の remaining を返す。
+ * limit は省略時に users.plan を再取得します。
+ * 複数端末からの同時更新では upsert の読み取り値が古いと上書きされるため、
+ * INSERT または rally_count の条件付き UPDATE（CAS）とリトライで 1 件ずつ増やします。
+ */
 export async function incrementDailyRally(sb, userId, preResolvedLimit) {
   const limit =
     typeof preResolvedLimit === "number"
       ? preResolvedLimit
       : await resolveDailyRallyLimit(sb, userId);
   const { ymd } = jstDateParts();
-  const { data: row, error: selErr } = await sb
-    .from("daily_usage")
-    .select("rally_count")
-    .eq("user_id", userId)
-    .eq("date", ymd)
-    .maybeSingle();
+  const maxAttempts = 16;
 
-  if (selErr) {
-    console.error("[memory] incrementDailyRally select:", selErr);
-    throw new Error(selErr.message || "利用回数の更新に失敗しました");
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data: row, error: selErr } = await sb
+      .from("daily_usage")
+      .select("rally_count")
+      .eq("user_id", userId)
+      .eq("date", ymd)
+      .maybeSingle();
+
+    if (selErr) {
+      console.error("[memory] incrementDailyRally select:", selErr);
+      throw new Error(selErr.message || "利用回数の更新に失敗しました");
+    }
+
+    const used =
+      row && typeof row.rally_count === "number" ? row.rally_count : 0;
+
+    if (used >= limit) {
+      const err = new Error("本日の上限回数に達しました。");
+      err.code = "DAILY_LIMIT";
+      throw err;
+    }
+
+    const next = used + 1;
+
+    if (!row) {
+      const { error: insErr } = await sb.from("daily_usage").insert({
+        user_id: userId,
+        date: ymd,
+        rally_count: 1,
+      });
+
+      if (!insErr) {
+        return {
+          remaining: Math.max(0, limit - 1),
+          used: 1,
+          dateKey: ymd,
+          limit,
+        };
+      }
+
+      if (insErr.code === "23505") {
+        continue;
+      }
+
+      console.error("[memory] incrementDailyRally insert:", insErr);
+      throw new Error(insErr.message || "利用回数の更新に失敗しました");
+    }
+
+    const { data: updatedRows, error: upErr } = await sb
+      .from("daily_usage")
+      .update({ rally_count: next })
+      .eq("user_id", userId)
+      .eq("date", ymd)
+      .eq("rally_count", used)
+      .select("rally_count");
+
+    if (upErr) {
+      console.error("[memory] incrementDailyRally update:", upErr);
+      throw new Error(upErr.message || "利用回数の更新に失敗しました");
+    }
+
+    if (
+      Array.isArray(updatedRows) &&
+      updatedRows.length === 1 &&
+      typeof updatedRows[0].rally_count === "number" &&
+      updatedRows[0].rally_count === next
+    ) {
+      return {
+        remaining: Math.max(0, limit - next),
+        used: next,
+        dateKey: ymd,
+        limit,
+      };
+    }
   }
 
-  const next = (typeof row?.rally_count === "number" ? row.rally_count : 0) + 1;
-  const { error: upErr } = await sb.from("daily_usage").upsert(
-    {
-      user_id: userId,
-      date: ymd,
-      rally_count: next,
-    },
-    { onConflict: "user_id,date" }
+  throw new Error(
+    "利用回数の更新に失敗しました（競合）。もう一度お試しください。"
   );
-
-  if (upErr) {
-    console.error("[memory] incrementDailyRally upsert:", upErr);
-    throw new Error(upErr.message || "利用回数の更新に失敗しました");
-  }
-
-  return { remaining: Math.max(0, limit - next), used: next, dateKey: ymd, limit };
 }
 
 /** 旧コード互換・エラー時フォールバック用（trial 相当） */

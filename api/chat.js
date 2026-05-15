@@ -311,16 +311,25 @@ async function handler(req, res) {
       console.error("[chat] save conversations:", err);
     }
 
-    let remainingAfter = remainingBefore;
-    let responseLimit = rallyLimit;
     if (!isInit) {
       try {
-        const inc = await incrementDailyRally(sb, user.id, rallyLimit);
-        remainingAfter = inc.remaining;
-        if (typeof inc.limit === "number") responseLimit = inc.limit;
+        await incrementDailyRally(sb, user.id, rallyLimit);
       } catch (err) {
         console.error("[chat] incrementDailyRally:", err);
       }
+    }
+
+    let remainingAfter = remainingBefore;
+    let responseLimit = rallyLimit;
+    try {
+      const snap = await getDailyRemaining(sb, user.id);
+      remainingAfter = snap.remaining;
+      if (typeof snap.limit === "number") responseLimit = snap.limit;
+      if (typeof snap.trial_days_remaining === "number") {
+        trialDaysRemaining = snap.trial_days_remaining;
+      }
+    } catch (err) {
+      console.error("[chat] getDailyRemaining response snapshot:", err);
     }
 
     return json(res, 200, {
