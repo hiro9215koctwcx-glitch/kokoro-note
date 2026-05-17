@@ -176,6 +176,8 @@ async function handler(req, res) {
       let plan = null;
       let trial_expired = false;
       let trial_days_remaining = null;
+      let campaign_expired = false;
+      let campaign_days_remaining = null;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
@@ -185,6 +187,11 @@ async function handler(req, res) {
         trial_days_remaining =
           typeof r.trial_days_remaining === "number"
             ? r.trial_days_remaining
+            : null;
+        campaign_expired = Boolean(r.campaign_expired);
+        campaign_days_remaining =
+          typeof r.campaign_days_remaining === "number"
+            ? r.campaign_days_remaining
             : null;
       } catch (err) {
         console.error("[auth GET] remaining:", err);
@@ -201,6 +208,8 @@ async function handler(req, res) {
           plan,
           trial_expired,
           trial_days_remaining,
+          campaign_expired,
+          campaign_days_remaining,
           plan_selected: metaChoice.plan_selected,
           chosen_plan: metaChoice.chosen_plan,
         })
@@ -314,12 +323,14 @@ async function handler(req, res) {
           ? null
           : String(row.plan).trim().toLowerCase() || null;
 
-      if (pNorm === "light" || pNorm === "standard") {
+      if (pNorm === "light" || pNorm === "standard" || pNorm === "campaign") {
         let remaining = RALLY_DAILY_LIMIT;
         let rallyLimit = RALLY_DAILY_LIMIT;
         let plan = pNorm;
         let trial_expired = false;
         let trial_days_remaining = null;
+        let campaign_expired = false;
+        let campaign_days_remaining = null;
         try {
           const r = await getDailyRemaining(sbUser, user.id);
           remaining = r.remaining;
@@ -329,6 +340,11 @@ async function handler(req, res) {
           trial_days_remaining =
             typeof r.trial_days_remaining === "number"
               ? r.trial_days_remaining
+              : null;
+          campaign_expired = Boolean(r.campaign_expired);
+          campaign_days_remaining =
+            typeof r.campaign_days_remaining === "number"
+              ? r.campaign_days_remaining
               : null;
         } catch (e) {
           console.error("[auth startTrial] quota:", e);
@@ -343,6 +359,8 @@ async function handler(req, res) {
             plan,
             trial_expired,
             trial_days_remaining,
+            campaign_expired,
+            campaign_days_remaining,
           })
         );
       }
@@ -423,6 +441,8 @@ async function handler(req, res) {
       let plan = null;
       let trial_expired = false;
       let trial_days_remaining = null;
+      let campaign_expired = false;
+      let campaign_days_remaining = null;
       try {
         const r = await getDailyRemaining(sbUser, user.id);
         remaining = r.remaining;
@@ -432,6 +452,11 @@ async function handler(req, res) {
         trial_days_remaining =
           typeof r.trial_days_remaining === "number"
             ? r.trial_days_remaining
+            : null;
+        campaign_expired = Boolean(r.campaign_expired);
+        campaign_days_remaining =
+          typeof r.campaign_days_remaining === "number"
+            ? r.campaign_days_remaining
             : null;
       } catch (e) {
         console.error("[auth startTrial] remaining:", e);
@@ -446,6 +471,8 @@ async function handler(req, res) {
           plan,
           trial_expired,
           trial_days_remaining,
+          campaign_expired,
+          campaign_days_remaining,
         })
       );
     } catch (err) {
@@ -653,6 +680,8 @@ async function handler(req, res) {
     let plan = null;
     let trial_expired = false;
     let trial_days_remaining = null;
+    let campaign_expired = false;
+    let campaign_days_remaining = null;
     try {
       const r = await getDailyRemaining(sbUser, user.id);
       remaining = r.remaining;
@@ -662,6 +691,11 @@ async function handler(req, res) {
       trial_days_remaining =
         typeof r.trial_days_remaining === "number"
           ? r.trial_days_remaining
+          : null;
+      campaign_expired = Boolean(r.campaign_expired);
+      campaign_days_remaining =
+        typeof r.campaign_days_remaining === "number"
+          ? r.campaign_days_remaining
           : null;
     } catch (e) {
       console.error("[auth signIn] remaining:", e);
@@ -680,6 +714,8 @@ async function handler(req, res) {
         plan,
         trial_expired,
         trial_days_remaining,
+        campaign_expired,
+        campaign_days_remaining,
         plan_selected: metaChoice.plan_selected,
         chosen_plan: metaChoice.chosen_plan,
       })
