@@ -21,7 +21,7 @@
 
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
-import { jstDateParts } from "./memory.js";
+import { jstDateParts, addCalendarDaysToYmd } from "./memory.js";
 
 function stripePlanKeyToColumnPlan(raw) {
   if (!raw || typeof raw !== "string") return null;
@@ -112,40 +112,91 @@ function sessionIsKokoroCampaign(session) {
 }
 
 function subscriptionIsKokoroCampaign(sub) {
-  const v = sub?.metadata?.kokoro_campaign;
-  return v === "1" || String(v).toLowerCase() === "true";
+  const meta =
+    sub?.metadata && typeof sub.metadata === "object" ? sub.metadata : {};
+  const v = meta.kokoro_campaign ?? meta["kokoro_campaign"];
+  if (v === 1 || v === "1") return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "true";
 }
 
 /**
  * Subscriptions API で直接作成したキャンペーンサブスク（metadata kokoro_campaign）
  */
 async function handleSubscriptionCreated(subscription) {
-  if (!subscriptionIsKokoroCampaign(subscription)) return;
+  console.log("[webhook] customer.subscription.created entered", {
+    subscriptionId: subscription?.id,
+    metadataKeys:
+      subscription?.metadata && typeof subscription.metadata === "object"
+        ? Object.keys(subscription.metadata)
+        : [],
+    metadataSnapshot: subscription?.metadata ?? null,
+  });
 
-  const userIdRaw =
-    typeof subscription?.metadata?.supabase_user_id === "string"
-      ? subscription.metadata.supabase_user_id.trim()
-      : "";
-  if (!userIdRaw) {
-    console.warn(
-      "[webhook] subscription.created kokoro_campaign skip: no supabase_user_id"
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  let stripe = null;
+  try {
+    stripe = stripeSecret ? new Stripe(stripeSecret) : null;
+  } catch (e) {
+    console.error("[webhook] Stripe client init failed (subscription.created)", e);
+  }
+
+  let sub = subscription;
+  if (stripe && subscription?.id) {
+    try {
+      sub = await stripe.subscriptions.retrieve(subscription.id);
+      const sm = sub?.metadata || {};
+      console.log("[webhook] customer.subscription.created after retrieve", {
+        id: sub.id,
+        kokoro_campaign_dot: sm.kokoro_campaign,
+        kokoro_campaign_bracket: sm["kokoro_campaign"],
+        supabase_user_id: sm.supabase_user_id ?? sm["supabase_user_id"],
+      });
+    } catch (e) {
+      console.error(
+        "[webhook] subscriptions.retrieve failed (subscription.created)",
+        subscription.id,
+        e
+      );
+    }
+  }
+
+  if (!subscriptionIsKokoroCampaign(sub)) {
+    console.log(
+      "[webhook] customer.subscription.created skip: kokoro_campaign not set",
+      sub?.id
     );
     return;
   }
 
-  const stripeSecret = process.env.STRIPE_SECRET_KEY;
-  const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
+  const meta =
+    sub?.metadata && typeof sub.metadata === "object" ? sub.metadata : {};
+  const userIdRaw =
+    typeof meta.supabase_user_id === "string"
+      ? meta.supabase_user_id.trim()
+      : typeof meta["supabase_user_id"] === "string"
+        ? meta["supabase_user_id"].trim()
+        : "";
 
-  let campaignEndYmd = null;
-  if (subscription?.current_period_end) {
-    campaignEndYmd = jstDateParts(
-      new Date(subscription.current_period_end * 1000)
-    ).ymd;
+  if (!userIdRaw) {
+    console.error(
+      "[webhook] subscription.created kokoro_campaign: missing supabase_user_id",
+      { subscriptionId: sub?.id, meta }
+    );
+    return;
   }
 
-  if (stripe && subscription?.id) {
+  const { ymd: todayJst } = jstDateParts();
+  const campaignEndYmd = addCalendarDaysToYmd(todayJst, 30);
+  console.log("[webhook] campaign_period_end_ymd (JST today + 30 days)", {
+    todayJst,
+    campaignEndYmd,
+    userIdRaw,
+  });
+
+  if (stripe && sub?.id) {
     try {
-      await stripe.subscriptions.update(subscription.id, {
+      await stripe.subscriptions.update(sub.id, {
         cancel_at_period_end: true,
       });
     } catch (e) {
@@ -153,12 +204,18 @@ async function handleSubscriptionCreated(subscription) {
     }
   }
 
-  const supabase = createServiceSupabase();
-
-  const patch = { plan: "campaign" };
-  if (campaignEndYmd) {
-    patch.campaign_period_end_ymd = campaignEndYmd;
+  let supabase;
+  try {
+    supabase = createServiceSupabase();
+  } catch (e) {
+    console.error("[webhook] subscription.created createServiceSupabase failed", e);
+    throw e;
   }
+
+  const patch = {
+    plan: "campaign",
+    campaign_period_end_ymd: campaignEndYmd,
+  };
 
   const { data, error } = await supabase
     .from("users")
@@ -167,50 +224,69 @@ async function handleSubscriptionCreated(subscription) {
     .select("id");
 
   if (error) {
-    console.error("[webhook] subscription.created users update failed", error);
+    console.error(
+      "[webhook] subscription.created users update failed",
+      error,
+      { userIdRaw, patch }
+    );
     throw error;
   }
 
-  if (!data?.length) {
-    let email = "";
-    const custId =
-      typeof subscription.customer === "string"
-        ? subscription.customer
-        : subscription.customer?.id;
-    if (custId && stripe) {
-      try {
-        const cust = await stripe.customers.retrieve(custId);
-        if (cust && !cust.deleted && typeof cust.email === "string") {
-          email = cust.email.trim();
-        }
-      } catch (e) {
-        console.warn("[webhook] subscription.created customer.retrieve", e);
+  if (data?.length) {
+    console.log("[webhook] subscription.created users update ok", {
+      userIdRaw,
+      rows: data.length,
+      patch,
+    });
+    return;
+  }
+
+  console.warn(
+    "[webhook] subscription.created update matched 0 rows; attempting insert",
+    { userIdRaw }
+  );
+
+  let email = "";
+  const custId =
+    typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+  if (custId && stripe) {
+    try {
+      const cust = await stripe.customers.retrieve(custId);
+      if (cust && !cust.deleted && typeof cust.email === "string") {
+        email = cust.email.trim();
       }
-    }
-    if (!email) {
-      console.error(
-        "[webhook] subscription.created users insert skipped: no email",
-        userIdRaw
-      );
-      return;
-    }
-
-    const insertPayload = {
-      id: userIdRaw,
-      plan: "campaign",
-      email,
-    };
-    if (campaignEndYmd) {
-      insertPayload.campaign_period_end_ymd = campaignEndYmd;
-    }
-
-    const { error: insErr } = await supabase.from("users").insert(insertPayload);
-
-    if (insErr) {
-      console.error("[webhook] subscription.created users insert failed", insErr);
-      throw insErr;
+    } catch (e) {
+      console.error("[webhook] subscription.created customer.retrieve failed", e);
     }
   }
+
+  if (!email) {
+    console.error(
+      "[webhook] subscription.created users insert skipped: no email",
+      { userIdRaw, customerId: custId }
+    );
+    return;
+  }
+
+  const insertPayload = {
+    id: userIdRaw,
+    plan: "campaign",
+    email,
+    campaign_period_end_ymd: campaignEndYmd,
+  };
+
+  const { error: insErr } = await supabase.from("users").insert(insertPayload);
+
+  if (insErr) {
+    console.error(
+      "[webhook] subscription.created users insert failed",
+      insErr,
+      insertPayload
+    );
+    throw insErr;
+  }
+
+  console.log("[webhook] subscription.created users insert ok", insertPayload);
 }
 
 async function handleCheckoutSessionCompleted(session) {
@@ -390,6 +466,11 @@ async function handler(req, res) {
 
   switch (event.type) {
     case "customer.subscription.created":
+      console.log("[webhook] stripe event received", {
+        type: event.type,
+        eventId: event.id,
+        subscriptionId: event.data?.object?.id,
+      });
       try {
         await handleSubscriptionCreated(event.data.object);
       } catch (e) {
