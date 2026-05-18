@@ -35,7 +35,6 @@
  * create policy users_select_own on public.users for select using (auth.uid() = id);
  *
  * alter table public.users add column if not exists trial_start_date date;
- * alter table public.users add column if not exists campaign_period_end_ymd date;
  *
  * create policy users_update_own on public.users for update using (auth.uid() = id) with check (auth.uid() = id);
  */
@@ -103,7 +102,6 @@ export function dailyLimitFromPlan(planRaw) {
   const p = String(planRaw).trim().toLowerCase();
   if (!p || p === "trial") return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
   if (p === "light") return 10;
-  if (p === "campaign") return 10;
   if (p === "standard") return 30;
   return TRIAL_OR_UNKNOWN_DAILY_LIMIT;
 }
@@ -168,29 +166,6 @@ export function computeTrialDaysRemaining(planNorm, trialStartRaw) {
   return Math.max(0, diff) + 1;
 }
 
-/**
- * キャンペーン（plan=campaign）の終了日 campaignEndRaw は JST の YYYY-MM-DD（DB date / メタと同一形式）。
- */
-export function computeCampaignExpired(planNorm, campaignEndRaw) {
-  if (planNorm !== "campaign") return false;
-  const endYmd = trialStartDateToYmd(campaignEndRaw);
-  if (!endYmd) return false;
-  const { ymd: todayYmd } = jstDateParts();
-  return todayYmd > endYmd;
-}
-
-export function computeCampaignDaysRemaining(planNorm, campaignEndRaw) {
-  if (planNorm !== "campaign") return null;
-  const endYmd = trialStartDateToYmd(campaignEndRaw);
-  if (!endYmd) return null;
-  const { ymd: todayYmd } = jstDateParts();
-  if (todayYmd > endYmd) return 0;
-  const t0 = new Date(`${todayYmd}T12:00:00+09:00`).getTime();
-  const t1 = new Date(`${endYmd}T12:00:00+09:00`).getTime();
-  const diff = Math.round((t1 - t0) / (24 * 60 * 60 * 1000));
-  return Math.max(0, diff) + 1;
-}
-
 async function fetchUserPlanTrialFromUsers(sb, userId) {
   let metaTrialYmd = null;
   try {
@@ -210,19 +185,13 @@ async function fetchUserPlanTrialFromUsers(sb, userId) {
 
   const { data, error } = await sb
     .from("users")
-    .select("plan, trial_start_date, campaign_period_end_ymd")
+    .select("plan, trial_start_date")
     .eq("id", userId)
     .maybeSingle();
 
   if (error) {
     console.warn("[memory] fetchUserPlanTrialFromUsers:", error.message);
-    return {
-      planNorm: null,
-      trial_expired: false,
-      trial_days_remaining: null,
-      campaign_expired: false,
-      campaign_days_remaining: null,
-    };
+    return { planNorm: null, trial_expired: false };
   }
 
   const planNorm = normalizePlanColumn(data?.plan);
@@ -233,19 +202,7 @@ async function fetchUserPlanTrialFromUsers(sb, userId) {
     planNorm,
     trialStartForExpiry
   );
-  const campaignEndRaw = data?.campaign_period_end_ymd;
-  const campaign_expired = computeCampaignExpired(planNorm, campaignEndRaw);
-  const campaign_days_remaining = computeCampaignDaysRemaining(
-    planNorm,
-    campaignEndRaw
-  );
-  return {
-    planNorm,
-    trial_expired,
-    trial_days_remaining,
-    campaign_expired,
-    campaign_days_remaining,
-  };
+  return { planNorm, trial_expired, trial_days_remaining };
 }
 
 export async function getUserPlan(sb, userId) {
@@ -303,13 +260,8 @@ export async function insertConversationRows(sb, userId, rows) {
 }
 
 export async function getDailyRemaining(sb, userId) {
-  const {
-    planNorm,
-    trial_expired,
-    trial_days_remaining,
-    campaign_expired,
-    campaign_days_remaining,
-  } = await fetchUserPlanTrialFromUsers(sb, userId);
+  const { planNorm, trial_expired, trial_days_remaining } =
+    await fetchUserPlanTrialFromUsers(sb, userId);
   const limit = dailyLimitFromPlan(planNorm);
   const { ymd } = jstDateParts();
   const { data, error } = await sb
@@ -333,8 +285,6 @@ export async function getDailyRemaining(sb, userId) {
     plan: planNorm,
     trial_expired,
     trial_days_remaining,
-    campaign_expired,
-    campaign_days_remaining,
   };
 }
 

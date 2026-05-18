@@ -1,7 +1,5 @@
 /**
  * Stripe Webhook: checkout.session.completed で Supabase `public.users.plan` を更新
- * customer.subscription.created でキャンペーン（Subscriptions API 直作成）を反映
- * customer.subscription.deleted でプラン解除・プラン選択へ戻す
  *
  * 必要な環境変数:
  * - STRIPE_WEBHOOK_SECRET (whsec_…)
@@ -15,13 +13,10 @@
  *   plan text,
  *   email text not null
  * );
- *
- * alter table public.users add column if not exists campaign_period_end_ymd date;
  */
 
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
-import { jstDateParts, addCalendarDaysToYmd } from "./memory.js";
 
 function stripePlanKeyToColumnPlan(raw) {
   if (!raw || typeof raw !== "string") return null;
@@ -67,28 +62,6 @@ function createServiceSupabase() {
   });
 }
 
-async function mergeUserMetadataAdmin(userId, patch) {
-  const baseUrl = process.env.SUPABASE_URL;
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!baseUrl || !serviceRole) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY が未設定です。");
-  }
-  const adminAuth = createClient(baseUrl, serviceRole, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: gu, error: gErr } = await adminAuth.auth.admin.getUserById(
-    userId
-  );
-  if (gErr) throw gErr;
-  const u = gu?.user;
-  if (!u) throw new Error("ユーザーが見つかりません。");
-  const nextMeta = { ...(u.user_metadata || {}), ...patch };
-  const { error: uErr } = await adminAuth.auth.admin.updateUserById(userId, {
-    user_metadata: nextMeta,
-  });
-  if (uErr) throw uErr;
-}
-
 async function resolvePlanKeyFromSession(session, stripe) {
   const fromSession = session?.metadata?.plan_key;
   if (fromSession && String(fromSession).trim()) {
@@ -106,189 +79,6 @@ async function resolvePlanKeyFromSession(session, stripe) {
   }
 }
 
-function sessionIsKokoroCampaign(session) {
-  const v = session?.metadata?.kokoro_campaign;
-  return v === "1" || String(v).toLowerCase() === "true";
-}
-
-function subscriptionIsKokoroCampaign(sub) {
-  const meta =
-    sub?.metadata && typeof sub.metadata === "object" ? sub.metadata : {};
-  const v = meta.kokoro_campaign ?? meta["kokoro_campaign"];
-  if (v === 1 || v === "1") return true;
-  const s = String(v ?? "").trim().toLowerCase();
-  return s === "true";
-}
-
-/**
- * Subscriptions API で直接作成したキャンペーンサブスク（metadata kokoro_campaign）
- */
-async function handleSubscriptionCreated(subscription) {
-  console.log("[webhook] customer.subscription.created entered", {
-    subscriptionId: subscription?.id,
-    metadataKeys:
-      subscription?.metadata && typeof subscription.metadata === "object"
-        ? Object.keys(subscription.metadata)
-        : [],
-    metadataSnapshot: subscription?.metadata ?? null,
-  });
-
-  const stripeSecret = process.env.STRIPE_SECRET_KEY;
-  let stripe = null;
-  try {
-    stripe = stripeSecret ? new Stripe(stripeSecret) : null;
-  } catch (e) {
-    console.error("[webhook] Stripe client init failed (subscription.created)", e);
-  }
-
-  let sub = subscription;
-  if (stripe && subscription?.id) {
-    try {
-      sub = await stripe.subscriptions.retrieve(subscription.id);
-      const sm = sub?.metadata || {};
-      console.log("[webhook] customer.subscription.created after retrieve", {
-        id: sub.id,
-        kokoro_campaign_dot: sm.kokoro_campaign,
-        kokoro_campaign_bracket: sm["kokoro_campaign"],
-        supabase_user_id: sm.supabase_user_id ?? sm["supabase_user_id"],
-      });
-    } catch (e) {
-      console.error(
-        "[webhook] subscriptions.retrieve failed (subscription.created)",
-        subscription.id,
-        e
-      );
-    }
-  }
-
-  if (!subscriptionIsKokoroCampaign(sub)) {
-    console.log(
-      "[webhook] customer.subscription.created skip: kokoro_campaign not set",
-      sub?.id
-    );
-    return;
-  }
-
-  const meta =
-    sub?.metadata && typeof sub.metadata === "object" ? sub.metadata : {};
-  const userIdRaw =
-    typeof meta.supabase_user_id === "string"
-      ? meta.supabase_user_id.trim()
-      : typeof meta["supabase_user_id"] === "string"
-        ? meta["supabase_user_id"].trim()
-        : "";
-
-  if (!userIdRaw) {
-    console.error(
-      "[webhook] subscription.created kokoro_campaign: missing supabase_user_id",
-      { subscriptionId: sub?.id, meta }
-    );
-    return;
-  }
-
-  const { ymd: todayJst } = jstDateParts();
-  const campaignEndYmd = addCalendarDaysToYmd(todayJst, 30);
-  console.log("[webhook] campaign_period_end_ymd (JST today + 30 days)", {
-    todayJst,
-    campaignEndYmd,
-    userIdRaw,
-  });
-
-  if (stripe && sub?.id) {
-    try {
-      await stripe.subscriptions.update(sub.id, {
-        cancel_at_period_end: true,
-      });
-    } catch (e) {
-      console.error("[webhook] subscription.created cancel_at_period_end", e);
-    }
-  }
-
-  let supabase;
-  try {
-    supabase = createServiceSupabase();
-  } catch (e) {
-    console.error("[webhook] subscription.created createServiceSupabase failed", e);
-    throw e;
-  }
-
-  const patch = {
-    plan: "campaign",
-    campaign_period_end_ymd: campaignEndYmd,
-  };
-
-  const { data, error } = await supabase
-    .from("users")
-    .update(patch)
-    .eq("id", userIdRaw)
-    .select("id");
-
-  if (error) {
-    console.error(
-      "[webhook] subscription.created users update failed",
-      error,
-      { userIdRaw, patch }
-    );
-    throw error;
-  }
-
-  if (data?.length) {
-    console.log("[webhook] subscription.created users update ok", {
-      userIdRaw,
-      rows: data.length,
-      patch,
-    });
-    return;
-  }
-
-  console.warn(
-    "[webhook] subscription.created update matched 0 rows; attempting insert",
-    { userIdRaw }
-  );
-
-  let email = "";
-  const custId =
-    typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-  if (custId && stripe) {
-    try {
-      const cust = await stripe.customers.retrieve(custId);
-      if (cust && !cust.deleted && typeof cust.email === "string") {
-        email = cust.email.trim();
-      }
-    } catch (e) {
-      console.error("[webhook] subscription.created customer.retrieve failed", e);
-    }
-  }
-
-  if (!email) {
-    console.error(
-      "[webhook] subscription.created users insert skipped: no email",
-      { userIdRaw, customerId: custId }
-    );
-    return;
-  }
-
-  const insertPayload = {
-    id: userIdRaw,
-    plan: "campaign",
-    email,
-    campaign_period_end_ymd: campaignEndYmd,
-  };
-
-  const { error: insErr } = await supabase.from("users").insert(insertPayload);
-
-  if (insErr) {
-    console.error(
-      "[webhook] subscription.created users insert failed",
-      insErr,
-      insertPayload
-    );
-    throw insErr;
-  }
-
-  console.log("[webhook] subscription.created users insert ok", insertPayload);
-}
-
 async function handleCheckoutSessionCompleted(session) {
   if (session.mode !== "subscription") return;
 
@@ -296,10 +86,7 @@ async function handleCheckoutSessionCompleted(session) {
   const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
 
   const planKeyRaw = await resolvePlanKeyFromSession(session, stripe);
-  const isCampaign = sessionIsKokoroCampaign(session);
-  const planColumn = isCampaign
-    ? "campaign"
-    : stripePlanKeyToColumnPlan(planKeyRaw);
+  const planColumn = stripePlanKeyToColumnPlan(planKeyRaw);
 
   const userIdRaw =
     (typeof session.metadata?.supabase_user_id === "string" &&
@@ -312,39 +99,15 @@ async function handleCheckoutSessionCompleted(session) {
     console.warn("[webhook] checkout.session.completed skip", {
       userId: userIdRaw || null,
       planKeyRaw: planKeyRaw || null,
-      isCampaign,
     });
     return;
   }
 
   const supabase = createServiceSupabase();
 
-  const subRef = session?.subscription;
-  const subId = typeof subRef === "string" ? subRef : subRef?.id;
-
-  let campaignEndYmd = null;
-  if (isCampaign && stripe && subId) {
-    try {
-      const sub = await stripe.subscriptions.retrieve(subId);
-      if (sub?.current_period_end) {
-        campaignEndYmd = jstDateParts(
-          new Date(sub.current_period_end * 1000)
-        ).ymd;
-      }
-      await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
-    } catch (e) {
-      console.error("[webhook] campaign subscription setup failed", e);
-    }
-  }
-
-  const patch = { plan: planColumn };
-  if (campaignEndYmd) {
-    patch.campaign_period_end_ymd = campaignEndYmd;
-  }
-
   const { data, error } = await supabase
     .from("users")
-    .update(patch)
+    .update({ plan: planColumn })
     .eq("id", userIdRaw)
     .select("id");
 
@@ -363,51 +126,16 @@ async function handleCheckoutSessionCompleted(session) {
       return;
     }
 
-    const insertPayload = {
+    const { error: insErr } = await supabase.from("users").insert({
       id: userIdRaw,
       plan: planColumn,
       email,
-    };
-    if (campaignEndYmd) {
-      insertPayload.campaign_period_end_ymd = campaignEndYmd;
-    }
-
-    const { error: insErr } = await supabase.from("users").insert(insertPayload);
+    });
 
     if (insErr) {
       console.error("[webhook] users insert failed", insErr);
       throw insErr;
     }
-  }
-}
-
-async function handleSubscriptionDeleted(subscription) {
-  const userIdRaw =
-    typeof subscription?.metadata?.supabase_user_id === "string"
-      ? subscription.metadata.supabase_user_id.trim()
-      : "";
-  if (!userIdRaw) {
-    console.warn("[webhook] subscription.deleted skip: no supabase_user_id");
-    return;
-  }
-
-  const supabase = createServiceSupabase();
-  const { error } = await supabase
-    .from("users")
-    .update({ plan: null, campaign_period_end_ymd: null })
-    .eq("id", userIdRaw);
-
-  if (error) {
-    console.error("[webhook] subscription.deleted users update", error);
-    throw error;
-  }
-
-  try {
-    await mergeUserMetadataAdmin(userIdRaw, {
-      plan_selected: false,
-    });
-  } catch (e) {
-    console.error("[webhook] subscription.deleted metadata", e);
   }
 }
 
@@ -465,30 +193,11 @@ async function handler(req, res) {
   }
 
   switch (event.type) {
-    case "customer.subscription.created":
-      console.log("[webhook] stripe event received", {
-        type: event.type,
-        eventId: event.id,
-        subscriptionId: event.data?.object?.id,
-      });
-      try {
-        await handleSubscriptionCreated(event.data.object);
-      } catch (e) {
-        console.error("[webhook] subscription.created 処理エラー", e);
-      }
-      break;
     case "checkout.session.completed":
       try {
         await handleCheckoutSessionCompleted(event.data.object);
       } catch (e) {
         console.error("[webhook] checkout.session.completed 処理エラー", e);
-      }
-      break;
-    case "customer.subscription.deleted":
-      try {
-        await handleSubscriptionDeleted(event.data.object);
-      } catch (e) {
-        console.error("[webhook] subscription.deleted 処理エラー", e);
       }
       break;
     default:

@@ -241,16 +241,12 @@ async function handler(req, res) {
   let remainingBefore;
   let rallyLimit = RALLY_DAILY_LIMIT;
   let trialDaysRemaining = null;
-  let campaignDaysRemaining = null;
   try {
     const r = await getDailyRemaining(sb, user.id);
     remainingBefore = r.remaining;
     if (typeof r.limit === "number") rallyLimit = r.limit;
     if (typeof r.trial_days_remaining === "number") {
       trialDaysRemaining = r.trial_days_remaining;
-    }
-    if (typeof r.campaign_days_remaining === "number") {
-      campaignDaysRemaining = r.campaign_days_remaining;
     }
     if (r.trial_expired) {
       return json(res, 403, {
@@ -260,22 +256,6 @@ async function handler(req, res) {
         remaining: r.remaining ?? 0,
         limit: rallyLimit,
         trial_days_remaining: trialDaysRemaining,
-        campaign_days_remaining: campaignDaysRemaining,
-      });
-    }
-    if (r.campaign_expired) {
-      return json(res, 403, {
-        error:
-          "キャンペーン期間が終了しました。プランをお選びください。",
-        campaign_expired: true,
-        remaining: r.remaining ?? 0,
-        limit: rallyLimit,
-        plan: r.plan ?? null,
-        trial_days_remaining: trialDaysRemaining,
-        campaign_days_remaining:
-          typeof r.campaign_days_remaining === "number"
-            ? r.campaign_days_remaining
-            : null,
       });
     }
   } catch (err) {
@@ -289,7 +269,6 @@ async function handler(req, res) {
       remaining: 0,
       limit: rallyLimit,
       trial_days_remaining: trialDaysRemaining,
-      campaign_days_remaining: campaignDaysRemaining,
     });
   }
 
@@ -349,9 +328,6 @@ async function handler(req, res) {
       if (typeof snap.trial_days_remaining === "number") {
         trialDaysRemaining = snap.trial_days_remaining;
       }
-      if (typeof snap.campaign_days_remaining === "number") {
-        campaignDaysRemaining = snap.campaign_days_remaining;
-      }
     } catch (err) {
       console.error("[chat] getDailyRemaining response snapshot:", err);
     }
@@ -361,7 +337,6 @@ async function handler(req, res) {
       remaining: remainingAfter,
       limit: responseLimit,
       trial_days_remaining: trialDaysRemaining,
-      campaign_days_remaining: campaignDaysRemaining,
       saveOk,
     });
   } catch (err) {

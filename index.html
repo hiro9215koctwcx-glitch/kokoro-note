@@ -175,31 +175,6 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .btn-plan-primary{width:100%;padding:13px;border:none;border-radius:14px;background:var(--green);color:#fff;font-family:inherit;font-weight:600;font-size:.9375rem;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 14px rgba(109,133,118,.35)}
 .btn-plan-primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 .btn-plan-outline{width:100%;padding:12px;border-radius:14px;border:1px solid rgba(143,163,149,.55);background:var(--white);color:var(--green-deep);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer}
-.plan-card--campaign{border-width:2px;border-color:rgba(109,133,118,.65);background:linear-gradient(145deg,#f0f7f2,#e4efe7);box-shadow:0 6px 22px rgba(109,133,118,.22)}
-.plan-card--campaign .plan-card-name{font-size:1rem}
-.plan-campaign-badge{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;background:var(--green-deep);color:#fff;font-size:.75rem;font-weight:600;letter-spacing:.04em}
-.plan-campaign-price-row{margin-top:10px;font-size:.9375rem;font-weight:600;color:var(--green-deep)}
-.plan-campaign-price-row .plan-price-strike{text-decoration:line-through;color:var(--muted);font-weight:500;margin-right:8px}
-.plan-campaign-price-row .plan-price-suffix{font-weight:500;color:var(--muted);font-size:.8125rem;margin-left:3px}
-.plan-campaign-promo{margin-top:14px;display:flex;flex-direction:column;gap:8px}
-.plan-campaign-promo input{width:100%;padding:11px 12px;border:1px solid rgba(143,163,149,.5);border-radius:12px;font-family:inherit;font-size:.875rem;background:var(--white)}
-.plan-campaign-promo input:focus{outline:2px solid rgba(109,133,118,.35)}
-.btn-plan-promo-apply{width:100%;padding:11px;border:none;border-radius:12px;background:var(--green-deep);color:#fff;font-family:inherit;font-weight:600;font-size:.8125rem;cursor:pointer;box-shadow:0 4px 12px rgba(70,90,75,.3)}
-.btn-plan-promo-apply:active{transform:scale(.985)}
-.plan-promo-feedback{font-size:.8125rem;text-align:center;margin:4px 0 0;min-height:1.35em;line-height:1.45}
-.plan-promo-feedback.is-ok{color:var(--green-deep);font-weight:600}
-.plan-promo-feedback.is-err{color:#a04444;font-weight:500}
-.campaign-ended-screen{position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom));min-height:100dvh;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
-.campaign-ended-card{width:100%;max-width:400px;background:var(--white);padding:28px 24px;border-radius:22px;box-shadow:0 12px 40px var(--sh)}
-.campaign-ended-title{font-size:1.15rem;font-weight:600;text-align:center;margin:0 0 14px;color:var(--green-deep);letter-spacing:.03em;line-height:1.45}
-.campaign-ended-msg{font-size:.875rem;color:var(--text);line-height:1.65;text-align:center;margin:0 0 22px}
-.campaign-ended-plan-grid{display:flex;flex-direction:column;gap:10px;margin-top:4px}
-.btn-campaign-pick{width:100%;padding:12px 14px;border:none;border-radius:14px;font-family:inherit;font-weight:600;font-size:.8125rem;cursor:pointer;text-align:center}
-.btn-campaign-pick-light-m{background:var(--green);color:#fff;box-shadow:0 4px 14px rgba(109,133,118,.3)}
-.btn-campaign-pick-std-m{background:var(--green-deep);color:#fff;box-shadow:0 4px 14px rgba(70,90,75,.35)}
-.btn-campaign-pick-light-y{background:var(--bubble);color:var(--green-deep);border:2px solid rgba(109,133,118,.45)}
-.btn-campaign-pick-std-y{background:var(--white);color:var(--green-deep);border:2px solid rgba(109,133,118,.35)}
-.rally-campaign-warn{color:#e85d5d;font-weight:600}
 #main-app{display:none;flex-direction:column;flex:1;min-height:0;position:relative;isolation:isolate;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);color:#fff}
 #main-app.is-visible{display:flex}
 #main-app::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.82;background-image:radial-gradient(1.5px 1.5px at 7% 11%,rgba(255,255,255,.9),transparent),radial-gradient(1px 1px at 18% 23%,rgba(255,255,255,.72),transparent),radial-gradient(2px 2px at 31% 8%,rgba(255,255,255,.85),transparent),radial-gradient(1px 1px at 44% 34%,rgba(255,255,255,.68),transparent),radial-gradient(1.5px 1.5px at 56% 17%,rgba(255,255,255,.8),transparent),radial-gradient(1px 1px at 69% 41%,rgba(255,255,255,.75),transparent),radial-gradient(2px 2px at 81% 28%,rgba(255,255,255,.82),transparent),radial-gradient(1px 1px at 93% 13%,rgba(255,255,255,.78),transparent),radial-gradient(1.5px 1.5px at 12% 46%,rgba(255,255,255,.65),transparent),radial-gradient(1px 1px at 26% 58%,rgba(255,255,255,.7),transparent),radial-gradient(1px 1px at 39% 71%,rgba(255,255,255,.62),transparent),radial-gradient(2px 2px at 52% 54%,rgba(255,255,255,.74),transparent),radial-gradient(1px 1px at 64% 67%,rgba(255,255,255,.69),transparent),radial-gradient(1.5px 1.5px at 76% 79%,rgba(255,255,255,.58),transparent),radial-gradient(1px 1px at 88% 62%,rgba(255,255,255,.71),transparent),radial-gradient(1px 1px at 95% 86%,rgba(255,255,255,.55),transparent),radial-gradient(1.5px 1.5px at 15% 82%,rgba(255,255,255,.63),transparent),radial-gradient(1px 1px at 48% 91%,rgba(255,255,255,.6),transparent),radial-gradient(2px 2px at 71% 94%,rgba(255,255,255,.52),transparent),radial-gradient(1px 1px at 34% 39%,rgba(255,255,255,.77),transparent),radial-gradient(1px 1px at 59% 73%,rgba(255,255,255,.66),transparent)}
@@ -209,7 +184,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 #main-app .logo{color:#fff}
 #main-app .subtitle{color:rgba(255,255,255,.72)}
 #main-app .rally-pill{background:rgba(255,255,255,.1);color:#fff}
-#main-app .rally-campaign-warn{color:#f87171;font-weight:600}
+#main-app .rally-pill.rally-pill--warn{color:#fbbf24}
 #main-app .btn-logout{background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;box-shadow:none}
 #main-app .row.user .bubble{background:rgba(99,130,100,.4);color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.2)}
 #main-app .row.ai .bubble{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1);border-bottom-left-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
@@ -299,19 +274,6 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
   </div>
 </div>
 
-<div id="campaign-ended-screen" class="campaign-ended-screen auth-hide" aria-hidden="true" role="alertdialog" aria-labelledby="campaign-ended-heading" aria-modal="true">
-  <div class="campaign-ended-card">
-    <p class="campaign-ended-title" id="campaign-ended-heading">30日間の無料キャンペーン期間が終了しました。</p>
-    <p class="campaign-ended-msg">引き続きご利用いただくには、プランをお選びください。</p>
-    <div class="campaign-ended-plan-grid">
-      <button type="button" class="btn-campaign-pick btn-campaign-pick-light-m" id="btn-campaign-ended-light-m">ライト月額 ¥800/月</button>
-      <button type="button" class="btn-campaign-pick btn-campaign-pick-std-m" id="btn-campaign-ended-standard-m">スタンダード月額 ¥1,980/月</button>
-      <button type="button" class="btn-campaign-pick btn-campaign-pick-light-y" id="btn-campaign-ended-light-y">ライト年額 ¥7,800/年</button>
-      <button type="button" class="btn-campaign-pick btn-campaign-pick-std-y" id="btn-campaign-ended-standard-y">スタンダード年額 ¥19,800/年</button>
-    </div>
-  </div>
-</div>
-
 <div id="plan-modal" class="plan-modal-overlay auth-hide" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
   <div class="plan-modal-window">
     <p class="plan-modal-title" id="plan-modal-title">プランをお選びください</p>
@@ -319,7 +281,6 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
     <p class="plan-modal-lead">有料プランでご利用開始いただくか、無料トライアルでお試しいただけます。</p>
     <p id="plan-modal-err" class="plan-modal-err" role="alert"></p>
     <div class="plan-cards" id="plan-cards">
-      <button type="button" class="plan-card plan-card--campaign" data-plan="campaign_light_monthly" aria-pressed="false"><span class="plan-card-name">30日間無料キャンペーン</span><span class="plan-campaign-badge">ライト月額対象 · 先着プロモーション</span><span class="plan-card-meta">キャンペーンコードで初月100%オフ（自動更新なし）</span><span class="plan-campaign-price-row" id="plan-campaign-price-row"><span class="plan-price-strike auth-hide" id="plan-campaign-price-strike">¥800</span><span class="plan-price-free" id="plan-campaign-price-display">¥800</span><span class="plan-price-suffix">/月</span></span><span class="plan-campaign-promo"><label class="sr-only" for="plan-promo-input">プロモーションコード</label><input type="text" id="plan-promo-input" autocomplete="off" placeholder="プロモーションコードをお持ちの方" /><button type="button" class="btn-plan-promo-apply" id="plan-promo-apply">コードを適用する</button><span id="plan-promo-feedback" class="plan-promo-feedback" aria-live="polite"></span></span></button>
       <button type="button" class="plan-card" data-plan="light_monthly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">月額800円</span></button>
       <button type="button" class="plan-card" data-plan="light_yearly" aria-pressed="false"><span class="plan-card-name">ライトプラン</span><span class="plan-card-meta">年額7,800円（月あたり約650円・約19%OFF）</span></button>
       <button type="button" class="plan-card" data-plan="standard_monthly" aria-pressed="false"><span class="plan-card-name">スタンダードプラン</span><span class="plan-card-meta">月額1,980円</span></button>
@@ -368,7 +329,7 @@ var supabaseClient=null;
 var kokoroAuthInitPromise=null;
 var MSG_SNAP="kokoro_msgs_v1";
 var LIM=5,DBL=700;
-var remainCount=LIM;var trialDaysRemain=null;var campaignDaysRemain=null;
+var remainCount=LIM;var trialDaysRemain=null;
 var registerMode=false,resetMode=false,passVisible=true,passVisibleUpd1=true,passVisibleUpd2=true;
 var recoveryAccessToken=null,recoveryRefreshToken=null,recoveryCode=null,updReturnTimer=null;
 var passwordRecoveryUiActive=false,blockKokoroMergeFromSupabase=false;
@@ -413,13 +374,6 @@ var planModalErr=document.getElementById("plan-modal-err");
 var planCardsWrap=document.getElementById("plan-cards");
 var planConfirmBtn=document.getElementById("plan-confirm-btn");
 var planFreeTrialBtn=document.getElementById("plan-free-trial-btn");
-var planPromoInput=document.getElementById("plan-promo-input");
-var planPromoApply=document.getElementById("plan-promo-apply");
-var planPromoFeedback=document.getElementById("plan-promo-feedback");
-var planCampaignPriceStrike=document.getElementById("plan-campaign-price-strike");
-var planCampaignPriceDisplay=document.getElementById("plan-campaign-price-display");
-var KOKORO_CAMPAIGN_CODE="KOKORO800";
-var campaignPromoApplied=false;
 
 var logEl=document.getElementById("chat-log"),inp=document.getElementById("message-input"),bSend=document.getElementById("btn-send"),bMic=document.getElementById("btn-mic"),bTts=document.getElementById("btn-tts"),bTtsStop=document.getElementById("btn-tts-stop"),rallyEl=document.getElementById("rally-display"),limEl=document.getElementById("limit-note");
 
@@ -506,8 +460,6 @@ function clearSessionAll(){
   else{try{localStorage.removeItem(SB_STORAGE_KEY)}catch(e2){}}
 }
 function readSessionTrialExpired(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return false;var o=JSON.parse(s);return o.trialExpired===true}catch(e){return false}}
-function readSessionCampaignExpired(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return false;var o=JSON.parse(s);return o.campaignExpired===true}catch(e){return false}}
-function readSessionBillingPlan(){try{var s=localStorage.getItem(SESS_KEY);if(!s)return null;var o=JSON.parse(s);if(o.billingPlan===undefined||o.billingPlan===null)return null;var t=String(o.billingPlan).trim().toLowerCase();return t||null}catch(e){return null}}
 function migrateSessionStorageToLocalStorage(){try{var o=sessionStorage.getItem(SESS_KEY);if(o&&!localStorage.getItem(SESS_KEY)){localStorage.setItem(SESS_KEY,o);sessionStorage.removeItem(SESS_KEY)}}catch(e){}}
 function mergeAppSessionFromSupabase(sess){
   if(blockKokoroMergeFromSupabase||passwordRecoveryUiActive)return;
@@ -518,8 +470,7 @@ function mergeAppSessionFromSupabase(sess){
     refresh_token:sess.refresh_token,
     user:sess.user,
     billingPlan:prev.billingPlan!==undefined?prev.billingPlan:null,
-    trialExpired:!!prev.trialExpired,
-    campaignExpired:!!prev.campaignExpired
+    trialExpired:!!prev.trialExpired
   });
 }
 function persistSupabaseSession(access_token,refresh_token){
@@ -530,7 +481,7 @@ function persistSupabaseSession(access_token,refresh_token){
 function extractRecoveryParamsFromLocation(){try{var h=(window.location.hash||"").replace(/^#/,""),qRaw=window.location.search||"",spH=new URLSearchParams(h),spQ=new URLSearchParams(qRaw.charAt(0)==="?"?qRaw.slice(1):qRaw),tp=String(spH.get("type")||spQ.get("type")||"").trim().toLowerCase();if(tp!=="recovery")return null;var at=spH.get("access_token")||spQ.get("access_token")||null,rf=spH.get("refresh_token")||spQ.get("refresh_token")||null,co=spQ.get("code")||spH.get("code")||null;if(!(at||co))return null;return{access_token:at,refresh_token:rf,code:co,type:"recovery"}}catch(e){return null}}
 function exitPasswordRecoveryGate(){passwordRecoveryUiActive=false;blockKokoroMergeFromSupabase=false}
 /** PKCE復旧リンクの読み込み時エラー → 設定画面へ（入力はブロック状態で文言表示） */
-function showRecoveryBootstrapError(rawMsg){passwordRecoveryUiActive=true;blockKokoroMergeFromSupabase=true;hideTrialEndedScreen();hideCampaignEndedScreen();authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();updErrShow(translateErrorToJa(rawMsg)||"リンクからセッションを取得できませんでした。パスワードリセットをやり直してください。");recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;stripAuthFromUrl()}
+function showRecoveryBootstrapError(rawMsg){passwordRecoveryUiActive=true;blockKokoroMergeFromSupabase=true;hideTrialEndedScreen();authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();updErrShow(translateErrorToJa(rawMsg)||"リンクからセッションを取得できませんでした。パスワードリセットをやり直してください。");recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;stripAuthFromUrl()}
 /** type=recovery + access_token: implicit。type=recovery + code のみ: exchange は送信時またはここで実施し、確立後ブラウザで updateUser */
 function bootstrapRecoverySessionFromUrl(snap,gotSession){
   if(passwordRecoveryUiActive)return Promise.resolve(true);
@@ -626,42 +577,25 @@ function initKokoroAuth(){
       });
     });
 }
-function hideCampaignEndedScreen(){var ce=document.getElementById("campaign-ended-screen");if(ce){ce.classList.add("auth-hide");ce.setAttribute("aria-hidden","true")}}
 function hideTrialEndedScreen(){var te=document.getElementById("trial-ended-screen");if(te){te.classList.add("auth-hide");te.setAttribute("aria-hidden","true")}}
-function showCampaignEndedScreen(){hideTrialEndedScreen();closePlanChoiceModal();var ce=document.getElementById("campaign-ended-screen");if(ce){ce.classList.remove("auth-hide");ce.setAttribute("aria-hidden","false")}authScreen.classList.add("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
-function showTrialEndedScreen(){hideCampaignEndedScreen();closePlanChoiceModal();var te=document.getElementById("trial-ended-screen");if(te){te.classList.remove("auth-hide");te.setAttribute("aria-hidden","false")}authScreen.classList.add("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
+function showTrialEndedScreen(){closePlanChoiceModal();var te=document.getElementById("trial-ended-screen");if(te){te.classList.remove("auth-hide");te.setAttribute("aria-hidden","false")}authScreen.classList.add("is-hidden");mainApp.classList.remove("is-visible");stopAud()}
 
-function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount,trialDaysRemain:trialDaysRemain,campaignDaysRemain:campaignDaysRemain};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
+function persistSnapshot(){try{var id=userId();if(!id)return;var o={userId:id,messages:apiMsgs,remaining:remainCount,trialDaysRemain:trialDaysRemain};sessionStorage.setItem(MSG_SNAP,JSON.stringify(o))}catch(e){}}
 
 function renderAllBubbles(){logEl.innerHTML="";var i,m;for(i=0;i<apiMsgs.length;i++){m=apiMsgs[i];if(m.role==="user")addBubble("user",m.content,false);else addBubble("ai",m.content,false)}scrollBot();refreshIosTtsOffersFromHistory()}
 
-function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)return false;var o=JSON.parse(raw);if(!o.userId||o.userId!==userId()||!Array.isArray(o.messages)||!o.messages.length)return false;apiMsgs=o.messages.slice();if(typeof o.remaining==="number")remainCount=o.remaining;if(Object.prototype.hasOwnProperty.call(o,"trialDaysRemain"))trialDaysRemain=(typeof o.trialDaysRemain==="number")?o.trialDaysRemain:null;if(Object.prototype.hasOwnProperty.call(o,"campaignDaysRemain"))campaignDaysRemain=(typeof o.campaignDaysRemain==="number")?o.campaignDaysRemain:null;renderAllBubbles();updRallyRemain(remainCount,trialDaysRemain,campaignDaysRemain);return true}catch(e){return false}}
+function loadSnapshot(){try{var raw=sessionStorage.getItem(MSG_SNAP);if(!raw)return false;var o=JSON.parse(raw);if(!o.userId||o.userId!==userId()||!Array.isArray(o.messages)||!o.messages.length)return false;apiMsgs=o.messages.slice();if(typeof o.remaining==="number")remainCount=o.remaining;if(Object.prototype.hasOwnProperty.call(o,"trialDaysRemain"))trialDaysRemain=(typeof o.trialDaysRemain==="number")?o.trialDaysRemain:null;renderAllBubbles();updRallyRemain(remainCount);return true}catch(e){return false}}
 
 function chatHeaders(){var h={"Content-Type":"application/json"};var t=getTok();if(t)h.Authorization="Bearer "+t;return h}
 
 var stripeCheckoutBusy=false;
 var trialFlowBusy=false;
 var selectedPlanKey=null;
-var PLAN_DISPLAY_LABELS={light_monthly:"ライトプラン（月額）",light_yearly:"ライトプラン（年額）",standard_monthly:"スタンダードプラン（月額）",standard_yearly:"スタンダードプラン（年額）",campaign_light_monthly:"30日間無料キャンペーン（ライト月額）"};
+var PLAN_DISPLAY_LABELS={light_monthly:"ライトプラン（月額）",light_yearly:"ライトプラン（年額）",standard_monthly:"スタンダードプラン（月額）",standard_yearly:"スタンダードプラン（年額）"};
 
-function syncCampaignTrialGate(){
-  if(!planFreeTrialBtn)return;
-  var block=campaignPromoApplied||selectedPlanKey==="campaign_light_monthly";
-  planFreeTrialBtn.disabled=block;
-  planFreeTrialBtn.style.opacity=block?"0.5":"1";
-  planFreeTrialBtn.style.cursor=block?"not-allowed":"pointer";
-}
-function resetCampaignPromoUi(){
-  campaignPromoApplied=false;
-  if(planPromoInput)planPromoInput.value="";
-  if(planPromoFeedback){planPromoFeedback.textContent="";planPromoFeedback.classList.remove("is-ok","is-err")}
-  if(planCampaignPriceStrike)planCampaignPriceStrike.classList.add("auth-hide");
-  if(planCampaignPriceDisplay)planCampaignPriceDisplay.textContent="¥800";
-}
-
-function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("auth-hide");planModal.setAttribute("aria-hidden","true");selectedPlanKey=null;if(planConfirmBtn)planConfirmBtn.disabled=true;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){c.classList.remove("is-selected");c.setAttribute("aria-pressed","false")})}if(planModalErr){planModalErr.textContent="";planModalErr.classList.remove("is-visible")}resetCampaignPromoUi()}
+function closePlanChoiceModal(){if(!planModal)return;planModal.classList.add("auth-hide");planModal.setAttribute("aria-hidden","true");selectedPlanKey=null;if(planConfirmBtn)planConfirmBtn.disabled=true;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){c.classList.remove("is-selected");c.setAttribute("aria-pressed","false")})}if(planModalErr){planModalErr.textContent="";planModalErr.classList.remove("is-visible")}}
 function planModalStripeErr(t){if(!planModalErr)return;planModalErr.textContent=t?translateErrorToJa(t):"";planModalErr.classList.toggle("is-visible",!!t)}
-function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");resetCampaignPromoUi();selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly"||prefill==="campaign_light_monthly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}syncCampaignTrialGate()}
+function openPlanChoiceModal(prefill){prefill=prefill||null;planModalStripeErr("");selectedPlanKey=(prefill==="light_monthly"||prefill==="light_yearly"||prefill==="standard_monthly"||prefill==="standard_yearly")?prefill:null;if(planCardsWrap){planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var k=c.getAttribute("data-plan");var on=k===selectedPlanKey;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")})}if(planConfirmBtn)planConfirmBtn.disabled=!selectedPlanKey;if(planModal){planModal.classList.remove("auth-hide");planModal.setAttribute("aria-hidden","false")}}
 function startFreeTrialAndChat(){
   function runTrial(){
     if(!getTok()){
@@ -680,10 +614,9 @@ function startFreeTrialAndChat(){
         if(!x.res.ok)throw new Error((x.j&&x.j.error)||"トライアル開始に失敗しました");
         if(typeof x.j.limit==="number")LIM=x.j.limit;
         patchRallyFromResponse(x.j);
-        patchSession({billingPlan:x.j.plan!==undefined&&x.j.plan!==null?x.j.plan:null,trialExpired:!!x.j.trial_expired,campaignExpired:!!x.j.campaign_expired});
+        patchSession({billingPlan:x.j.plan!==undefined&&x.j.plan!==null?x.j.plan:null,trialExpired:!!x.j.trial_expired});
         closePlanChoiceModal();
         if(x.j.trial_expired===true){showTrialEndedScreen();return}
-        if(x.j.campaign_expired===true){showCampaignEndedScreen();return}
         showChatView();
         logEl.innerHTML="";
         apiMsgs=[];
@@ -705,12 +638,11 @@ function needsPlanChoiceModal(planToken,authPayload){
     var t=String(planToken).trim().toLowerCase();
     if(t)p=t;
   }
-  if(p==="light"||p==="standard"||p==="campaign")return false;
+  if(p==="light"||p==="standard")return false;
   return true;
 }
 
 function enterChatSkippingPlanChoice(){
-  if(readSessionCampaignExpired()){showCampaignEndedScreen();return}
   if(readSessionTrialExpired()){showTrialEndedScreen();return}
   closePlanChoiceModal();
   showChatView();
@@ -733,9 +665,8 @@ function bootstrapReturningUserPlanGate(lpPrefill){
       }
       if(typeof x.j.limit==="number")LIM=x.j.limit;
       patchRallyFromResponse(x.j);
-      patchSession({billingPlan:x.j.plan!=null&&x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired,campaignExpired:!!x.j.campaign_expired});
+      patchSession({billingPlan:x.j.plan!=null&&x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
       if(x.j.trial_expired===true){showTrialEndedScreen();return}
-      if(x.j.campaign_expired===true){showCampaignEndedScreen();return}
       if(!needsPlanChoiceModal(x.j.plan,x.j)){
         enterChatSkippingPlanChoice();
         return;
@@ -747,7 +678,7 @@ function bootstrapReturningUserPlanGate(lpPrefill){
     .catch(function(e){console.error("[bootstrap plan-gate]",e&&e.stack||e);showAuthView();syncAuthUi();openPlanChoiceModal(lpPrefill);});
 }
 
-function parsePlanQuery(){try{var raw=window.location.search||"",sp=new URLSearchParams(raw.charAt(0)==="?"?raw.slice(1):raw),p=(sp.get("plan")||"").trim().toLowerCase();if(p==="light_monthly"||p==="light_yearly"||p==="standard_monthly"||p==="standard_yearly"||p==="campaign_light_monthly")return p}catch(e){}return null}
+function parsePlanQuery(){try{var raw=window.location.search||"",sp=new URLSearchParams(raw.charAt(0)==="?"?raw.slice(1):raw),p=(sp.get("plan")||"").trim().toLowerCase();if(p==="light_monthly"||p==="light_yearly"||p==="standard_monthly"||p==="standard_yearly")return p}catch(e){}return null}
 function openBillingPortal(){
   var btn=document.getElementById("btn-plan-portal");
   if(!getTok()){console.error("[billing portal] ログインが必要です");return}
@@ -769,10 +700,7 @@ function stripeCheckoutRedirect(planKey,opt){
   if(!tok){closePlanChoiceModal();showAuthView();syncAuthUi();return Promise.reject(new Error("ログインが必要です"))}
   if(stripeCheckoutBusy)return Promise.resolve();
   stripeCheckoutBusy=true;
-  var checkoutPlan=planKey==="campaign_light_monthly"?"light_monthly":planKey;
-  var payload={plan:checkoutPlan};
-  if(planKey==="campaign_light_monthly"){payload.use_kokoro_campaign=true;payload.promotion_code=KOKORO_CAMPAIGN_CODE}
-  return fetch(resolveApi("api/checkout"),{method:"POST",headers:chatHeaders(),body:JSON.stringify(payload),credentials:"same-origin"})
+  return fetch(resolveApi("api/checkout"),{method:"POST",headers:chatHeaders(),body:JSON.stringify({plan:planKey}),credentials:"same-origin"})
     .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return{res:res,j:j};})})
     .then(function(x){
       var preferModal=!planModal.classList.contains("auth-hide")&&!!opt.failInModal;
@@ -830,26 +758,15 @@ function stripeCheckoutRedirect(planKey,opt){
 function remain(){return remainCount}
 function patchRallyFromResponse(j){
   if(!j||typeof j!=="object"||typeof j.remaining!=="number")return;
-  var td=trialDaysRemain;
-  var cd=campaignDaysRemain;
-  if(Object.prototype.hasOwnProperty.call(j,"trial_days_remaining"))td=(typeof j.trial_days_remaining==="number")?j.trial_days_remaining:null;
-  if(Object.prototype.hasOwnProperty.call(j,"campaign_days_remaining"))cd=(typeof j.campaign_days_remaining==="number")?j.campaign_days_remaining:null;
-  updRallyRemain(j.remaining,td,cd);
-  if(cd===0&&readSessionBillingPlan()==="campaign"){patchSession({campaignExpired:true});showCampaignEndedScreen()}
+  if(Object.prototype.hasOwnProperty.call(j,"trial_days_remaining"))updRallyRemain(j.remaining,(typeof j.trial_days_remaining==="number")?j.trial_days_remaining:null);
+  else updRallyRemain(j.remaining);
 }
-function updRallyRemain(r,trialDays,campaignDays){
+function updRallyRemain(r,trialDays){
   if(typeof r==="number")remainCount=r;
   if(arguments.length>=2)trialDaysRemain=(typeof trialDays==="number")?trialDays:null;
-  if(arguments.length>=3)campaignDaysRemain=(typeof campaignDays==="number")?campaignDays:null;
-  var parts=[];
-  parts.push("残り "+remainCount+" 回");
-  if(typeof trialDaysRemain==="number")parts.push("残り "+trialDaysRemain+" 日");
-  if(typeof campaignDaysRemain==="number"){
-    var cTxt="キャンペーン残り: "+campaignDaysRemain+"日";
-    if(campaignDaysRemain<=3)cTxt="<span class=\"rally-campaign-warn\">"+cTxt+"</span>";
-    parts.push(cTxt);
-  }
-  rallyEl.innerHTML=parts.join(" ｜ ");
+  var txt="残り "+remainCount+" 回";
+  if(typeof trialDaysRemain==="number")txt+=" ｜ 残り "+trialDaysRemain+" 日";
+  rallyEl.textContent=txt;
   var lowRemain=remainCount<=1;
   var lowDays=(typeof trialDaysRemain==="number"&&trialDaysRemain<=2);
   rallyEl.classList.toggle("rally-pill--warn",lowRemain||lowDays);
@@ -857,7 +774,6 @@ function updRallyRemain(r,trialDays,campaignDays){
 
 function showAuthView(){
   hideTrialEndedScreen();
-  hideCampaignEndedScreen();
   closePlanChoiceModal();
   authScreen.classList.remove("is-hidden");
   mainApp.classList.remove("is-visible");
@@ -869,7 +785,7 @@ function showAuthView(){
   authLoginCard.classList.remove("auth-hide");
   authUpdateCard.classList.add("auth-hide");
 }
-function syncPlanPortalButtonVisibility(){var btn=document.getElementById("btn-plan-portal");if(!btn)return;var show=false;try{var raw=localStorage.getItem(SESS_KEY);if(raw){var oo=JSON.parse(raw);var bp=oo.billingPlan;if(bp!==undefined&&bp!==null){var tt=String(bp).trim().toLowerCase();if(tt)show=(tt==="light"||tt==="standard"||tt==="campaign")}}}catch(ge){console.error("[syncPlanPortalButtonVisibility]",ge)}btn.classList.toggle("auth-hide",!show)}
+function syncPlanPortalButtonVisibility(){var btn=document.getElementById("btn-plan-portal");if(!btn)return;var show=false;try{var raw=localStorage.getItem(SESS_KEY);if(raw){var oo=JSON.parse(raw);var bp=oo.billingPlan;if(bp!==undefined&&bp!==null){var tt=String(bp).trim().toLowerCase();if(tt)show=(tt==="light"||tt==="standard")}}}catch(ge){console.error("[syncPlanPortalButtonVisibility]",ge)}btn.classList.toggle("auth-hide",!show)}
 function persistVoiceHintsSeen(){try{localStorage.setItem(VOICE_HINTS_LS_KEY,"1")}catch(e){}}
 function registerVoiceHintsSeenOnLeave(){
   if(voiceHintsPersistRegistered)return;
@@ -898,10 +814,8 @@ function syncMicUsageHint(){
   try{localStorage.setItem(MIC_USAGE_HINT_LS_KEY,String(cnt+1))}catch(le){}
 }
 function showChatView(){
-  if(readSessionCampaignExpired()){showCampaignEndedScreen();return}
   if(readSessionTrialExpired()){showTrialEndedScreen();return}
   hideTrialEndedScreen();
-  hideCampaignEndedScreen();
   authScreen.classList.add("is-hidden");
   mainApp.classList.add("is-visible");
   syncPlanPortalButtonVisibility();
@@ -921,7 +835,7 @@ function updErrHide(){updErr.style.display="none";updErr.textContent=""}
 function updSuccessShow(t){updSucc.style.display="block";updSucc.textContent=t||""}
 function updSuccessHide(){updSucc.style.display="none";updSucc.textContent=""}
 function applyUpdPassVisibility(){if(updPass1){updPass1.type=passVisibleUpd1?"text":"password";if(updEye1){updEye1.setAttribute("aria-pressed",passVisibleUpd1?"true":"false");updEye1.setAttribute("aria-label",passVisibleUpd1?"パスワードを隠す":"パスワードを表示")}}if(updPass2){updPass2.type=passVisibleUpd2?"text":"password";if(updEye2){updEye2.setAttribute("aria-pressed",passVisibleUpd2?"true":"false");updEye2.setAttribute("aria-label",passVisibleUpd2?"パスワードを隠す":"パスワードを表示")}}}
-function enterRecoveryPasswordFlow(rec){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}passwordRecoveryUiActive=true;blockKokoroMergeFromSupabase=true;hideTrialEndedScreen();hideCampaignEndedScreen();recoveryAccessToken=(rec&&rec.access_token)||null;recoveryRefreshToken=(rec&&rec.refresh_token)||null;recoveryCode=(rec&&rec.code)||null;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
+function enterRecoveryPasswordFlow(rec){if(updReturnTimer){clearTimeout(updReturnTimer);updReturnTimer=null}passwordRecoveryUiActive=true;blockKokoroMergeFromSupabase=true;hideTrialEndedScreen();recoveryAccessToken=(rec&&rec.access_token)||null;recoveryRefreshToken=(rec&&rec.refresh_token)||null;recoveryCode=(rec&&rec.code)||null;authScreen.classList.remove("is-hidden");mainApp.classList.remove("is-visible");authLoginCard.classList.add("auth-hide");authUpdateCard.classList.remove("auth-hide");updErrHide();updSuccessHide();updPass1.value="";updPass2.value="";applyUpdPassVisibility();stripAuthFromUrl()}
 function submitUpdatePassword(){updErrHide();updSuccessHide();if(!supabaseClient){updErrShow("認証クライアントが準備できていません。ページを再読み込みしてください。");return}var p1=(updPass1&&updPass1.value)||"",p2=(updPass2&&updPass2.value)||"";if(!p1||!p2){updErrShow("新しいパスワードと確認を入力してください");return}if(p1!==p2){updErrShow("パスワードが一致しません");return}updSubmit.disabled=true;supabaseClient.auth.updateUser({password:p1}).then(function(uRes){if(uRes.error)throw uRes.error;return supabaseClient.auth.signOut({scope:"local"})}).then(function(so){if(so&&so.error)console.warn("[kokoro recovery] signOut:",so.error);updSuccessShow("パスワードを更新しました。ログインしてください。");if(updReturnTimer)clearTimeout(updReturnTimer);updReturnTimer=setTimeout(function(){updReturnTimer=null;exitPasswordRecoveryGate();recoveryAccessToken=null;recoveryRefreshToken=null;recoveryCode=null;updSuccessHide();authLoginCard.classList.remove("auth-hide");authUpdateCard.classList.add("auth-hide");syncAuthUi()},1500)}).catch(function(e){console.error("[kokoro recovery]",e);updErrShow(translateErrorToJa(e&&e.message?e.message:"更新に失敗しました"))}).finally(function(){updSubmit.disabled=false})}
 
 function applyPassVisibility(){authPass.type=passVisible?"text":"password";if(authPassEye){authPassEye.setAttribute("aria-pressed",passVisible?"true":"false");authPassEye.setAttribute("aria-label",passVisible?"パスワードを隠す":"パスワードを表示")}}
@@ -937,8 +851,8 @@ function escapeHtml(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;
 function formatAiBubbleHtml(raw){var s=escapeHtml(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"<strong>$1</strong>");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1<em>$2</em>");s=s.replace(/\n/g,"<br>");return s}
 function markdownToPlainForTypewriter(raw){var s=String(raw||"");s=s.replace(/\*\*([\s\S]*?)\*\*/g,"$1");s=s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,"$1$2");s=s.replace(/^#{1,6}\s?/gm,"");s=s.replace(/```[\s\S]*?```/g,function(m){return m.replace(/^```[^\n]*\n?|\n?```$/g,"")});s=s.replace(/`([^`]*)`/g,"$1");return s}
 function lockTypewriterComposer(){typewriterBusy=true;if(bSend)bSend.disabled=true}
-function releaseTypewriterAfterTypewriterDone(){typewriterBusy=false;typewriterState=null;updRallyRemain(remainCount,trialDaysRemain,campaignDaysRemain)}
-function finalizeTypewriterIfNeeded(){var st=typewriterState;if(!st)return;if(st.timer){try{clearTimeout(st.timer)}catch(e){}st.timer=null}try{if(st.bubble&&st.fullRaw)st.bubble.innerHTML=formatAiBubbleHtml(st.fullRaw)}catch(e){}typewriterState=null;typewriterBusy=false;updRallyRemain(remainCount,trialDaysRemain,campaignDaysRemain);try{persistSnapshot()}catch(ePn){}}
+function releaseTypewriterAfterTypewriterDone(){typewriterBusy=false;typewriterState=null;updRallyRemain(remainCount)}
+function finalizeTypewriterIfNeeded(){var st=typewriterState;if(!st)return;if(st.timer){try{clearTimeout(st.timer)}catch(e){}st.timer=null}try{if(st.bubble&&st.fullRaw)st.bubble.innerHTML=formatAiBubbleHtml(st.fullRaw)}catch(e){}typewriterState=null;typewriterBusy=false;updRallyRemain(remainCount);try{persistSnapshot()}catch(ePn){}}
 function finalizeIosListenUiOnPageLeave(){var label="🔊 返答を聞く";if(!logEl)return;try{logEl.querySelectorAll(".tts-ios-offer-row").forEach(function(wrap){var play=wrap.querySelector(".tts-ios-play-btn"),stop=wrap.querySelector(".tts-ios-stop-btn");if(play){play.disabled=false;play.classList.remove("auth-hide");play.textContent=label}if(stop)stop.classList.add("auth-hide")})}catch(e){}}
 function finalizePageLeaveAssistant(){finalizeTypewriterIfNeeded();finalizeIosListenUiOnPageLeave();try{stopAud()}catch(z){}}
 function addAiBubbleTypewriter(fullRaw,onDone){var row=document.createElement("div");row.className="row ai";var b=document.createElement("div");b.className="bubble";row.appendChild(b);logEl.appendChild(row);scrollBot();var plain=markdownToPlainForTypewriter(fullRaw);lockTypewriterComposer();var st={bubble:b,fullRaw:fullRaw,row:row,timer:null};typewriterState=st;function finish(){if(typewriterState!==st)return;try{b.innerHTML=formatAiBubbleHtml(fullRaw)}catch(e){}releaseTypewriterAfterTypewriterDone();scrollBot();if(onDone)onDone(row)}if(!plain.length){finish();return}var idx=0;function tick(){if(typewriterState!==st)return;idx++;if(idx>plain.length){finish();return}b.innerHTML=escapeHtml(plain.slice(0,idx)).replace(/\n/g,"<br>");scrollBot();st.timer=setTimeout(tick,32+Math.floor(Math.random()*9))}st.timer=setTimeout(tick,0)}
@@ -1213,14 +1127,6 @@ function initFromServer(){
         showTrialEndedScreen();
         return;
       }
-      if(x.res.status===403&&x.j&&x.j.campaign_expired===true){
-        kokoroRemoveThinkingRow();
-        patchSession({campaignExpired:true});
-        if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
-        patchRallyFromResponse(x.j);
-        showCampaignEndedScreen();
-        return;
-      }
       if(!x.res.ok){throw new Error(String((x.j&&x.j.error)||"[chat-init] "+x.res.status));}
       var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");
       kokoroRemoveThinkingRow();
@@ -1233,7 +1139,7 @@ function initFromServer(){
       addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));if(ttsOn)scheduleAssistantTts(msg,aiRow)});
     })
     .catch(function(e){kokoroRemoveThinkingRow();logErr("[init]",e);var fb="初回メッセージを取得できませんでした。再読み込みしてください。";addBubble("ai",translateErrorToJa((e&&e.message)?e.message:fb),true)})
-    .finally(function(){sending=false;updRallyRemain(remainCount,trialDaysRemain,campaignDaysRemain);if(!typewriterBusy)try{inp.focus()}catch(z){}});
+    .finally(function(){sending=false;updRallyRemain(remainCount);if(!typewriterBusy)try{inp.focus()}catch(z){}});
 }
 
 function submitRecover(){authErrHide();authSuccessHide();var em=(authEmail.value||"").trim();if(!em){authErrShow("メールアドレスを入力してください");return}
@@ -1253,14 +1159,13 @@ function submitAuth(){
       .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(eParse){console.error("[kokoro auth] レスポンスJSON解析エラー",eParse)}return {res:res,j:j};})})
       .then(function(x){if(!x.res.ok){throw new Error((x.j&&x.j.error)||"認証に失敗しました");}if(x.j.needEmailConfirm){authErrShow(x.j.message||"確認メールをご確認ください");return}if(!x.j.access_token)throw new Error("トークンを取得できませんでした");
         sessionStorage.removeItem(MSG_SNAP);
-        var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user,billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired,campaignExpired:!!x.j.campaign_expired};
+        var sess={access_token:x.j.access_token,refresh_token:x.j.refresh_token,user:x.j.user,billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired};
         setSession(sess);
         if(typeof x.j.limit==="number")LIM=x.j.limit;
         patchRallyFromResponse(x.j);
         authPass.value="";
         var afterLogin=function(){
           if(x.j.trial_expired===true){closePlanChoiceModal();showTrialEndedScreen();return}
-          if(x.j.campaign_expired===true){closePlanChoiceModal();showCampaignEndedScreen();return}
           if(needsPlanChoiceModal(x.j.plan,x.j)){openPlanChoiceModal(parsePlanQuery())}else{enterChatSkippingPlanChoice()}
         };
         persistSupabaseSession(x.j.access_token,x.j.refresh_token).then(afterLogin).catch(function(err){console.error("[persistSupabaseSession]",err);afterLogin()});
@@ -1286,27 +1191,10 @@ authPassEye.addEventListener("click",function(){passVisible=!passVisible;applyPa
 var btnPlanPortal=document.getElementById("btn-plan-portal");
 if(btnPlanPortal)btnPlanPortal.addEventListener("click",function(){openBillingPortal()})
 else{console.error("[kokoro] btn-plan-portal が見つかりません")}
-btnLogout.addEventListener("click",function(){clearSessionAll();exitPasswordRecoveryGate();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;trialDaysRemain=null;campaignDaysRemain=null;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM,null,null)});
-planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;if(key!=="campaign_light_monthly")resetCampaignPromoUi();selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("");syncCampaignTrialGate()});
-planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");if(selectedPlanKey==="campaign_light_monthly"){if(!campaignPromoApplied){planModalStripeErr("プロモーションコードを適用してください");return}stripeCheckoutRedirect("campaign_light_monthly",{failInModal:true}).catch(function(){});return}stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
+btnLogout.addEventListener("click",function(){clearSessionAll();exitPasswordRecoveryGate();apiMsgs=[];logEl.innerHTML="";remainCount=LIM;trialDaysRemain=null;showAuthView();resetMode=false;registerMode=false;syncAuthUi();authErrHide();authSuccessHide();stopAud();inp.value="";updRallyRemain(LIM,null)});
+planCardsWrap.addEventListener("click",function(ev){var t=ev.target.closest(".plan-card");if(!t)return;var key=t.getAttribute("data-plan");if(!key)return;selectedPlanKey=key;planCardsWrap.querySelectorAll(".plan-card").forEach(function(c){var on=c.getAttribute("data-plan")===key;c.classList.toggle("is-selected",on);c.setAttribute("aria-pressed",on?"true":"false")});planConfirmBtn.disabled=false;planModalStripeErr("")});
+planConfirmBtn.addEventListener("click",function(){if(!selectedPlanKey)return;planModalStripeErr("");stripeCheckoutRedirect(selectedPlanKey,{failInModal:true}).catch(function(){})});
 planFreeTrialBtn.addEventListener("click",function(){planModalStripeErr("");startFreeTrialAndChat()});
-if(planPromoApply)planPromoApply.addEventListener("click",function(){
-  if(planPromoFeedback){planPromoFeedback.textContent="";planPromoFeedback.classList.remove("is-ok","is-err")}
-  if(selectedPlanKey!=="campaign_light_monthly"){
-    if(planPromoFeedback){planPromoFeedback.textContent="キャンペーンコードはライト月額プランのみご利用いただけます";planPromoFeedback.classList.add("is-err")}
-    return;
-  }
-  var raw=(planPromoInput&&planPromoInput.value||"").trim().toUpperCase();
-  if(raw!==KOKORO_CAMPAIGN_CODE){
-    if(planPromoFeedback){planPromoFeedback.textContent="コードが無効です";planPromoFeedback.classList.add("is-err")}
-    return;
-  }
-  campaignPromoApplied=true;
-  if(planPromoFeedback){planPromoFeedback.textContent="1ヶ月無料が適用されました ✅";planPromoFeedback.classList.add("is-ok")}
-  if(planCampaignPriceStrike)planCampaignPriceStrike.classList.remove("auth-hide");
-  if(planCampaignPriceDisplay)planCampaignPriceDisplay.textContent="¥0";
-  syncCampaignTrialGate();
-});
 var btnTrialUpgradeLight=document.getElementById("btn-trial-upgrade-light");
 var btnTrialUpgradeStandard=document.getElementById("btn-trial-upgrade-standard");
 var btnTrialMorePlans=document.getElementById("btn-trial-more-plans");
@@ -1314,28 +1202,13 @@ if(btnTrialUpgradeLight)btnTrialUpgradeLight.addEventListener("click",function()
 if(btnTrialUpgradeStandard)btnTrialUpgradeStandard.addEventListener("click",function(){stripeCheckoutRedirect("standard_monthly",{}).catch(function(){})});
 if(btnTrialMorePlans)btnTrialMorePlans.addEventListener("click",function(){openPlanChoiceModal(parsePlanQuery())});
 
-var btnCampaignEndedLightM=document.getElementById("btn-campaign-ended-light-m");
-var btnCampaignEndedStandardM=document.getElementById("btn-campaign-ended-standard-m");
-var btnCampaignEndedLightY=document.getElementById("btn-campaign-ended-light-y");
-var btnCampaignEndedStandardY=document.getElementById("btn-campaign-ended-standard-y");
-function gotoStripePlanFromCampaignEnd(planKey){
-  patchSession({campaignExpired:false});
-  hideCampaignEndedScreen();
-  stripeCheckoutRedirect(planKey,{}).catch(function(){});
-}
-if(btnCampaignEndedLightM)btnCampaignEndedLightM.addEventListener("click",function(){gotoStripePlanFromCampaignEnd("light_monthly")});
-if(btnCampaignEndedStandardM)btnCampaignEndedStandardM.addEventListener("click",function(){gotoStripePlanFromCampaignEnd("standard_monthly")});
-if(btnCampaignEndedLightY)btnCampaignEndedLightY.addEventListener("click",function(){gotoStripePlanFromCampaignEnd("light_yearly")});
-if(btnCampaignEndedStandardY)btnCampaignEndedStandardY.addEventListener("click",function(){gotoStripePlanFromCampaignEnd("standard_yearly")});
-
 function tryResumeSession(){if(passwordRecoveryUiActive)return;var tok=getTok();if(!tok){showAuthView();return}
 fetch(resolveApi("api/auth"),{method:"GET",headers:{Authorization:"Bearer "+tok}})
   .then(function(res){return res.text().then(function(txt){var j={};try{j=txt?JSON.parse(txt):{}}catch(e){}return {res:res,j:j};})})
   .then(function(x){if(!x.res.ok){throw new Error("ng");}if(typeof x.j.limit==="number")LIM=x.j.limit;
     patchRallyFromResponse(x.j);
-    patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired,campaignExpired:!!x.j.campaign_expired});
+    patchSession({billingPlan:x.j.plan!==undefined?x.j.plan:null,trialExpired:!!x.j.trial_expired});
     if(x.j.trial_expired===true){showTrialEndedScreen();return}
-    if(x.j.campaign_expired===true){showCampaignEndedScreen();return}
     if(needsPlanChoiceModal(x.j.plan,x.j)){showAuthView();syncAuthUi();openPlanChoiceModal(parsePlanQuery());return}
     showChatView();
     if(loadSnapshot()){try{inp.focus()}catch(z){};return}
@@ -1371,22 +1244,11 @@ function send(){
         showTrialEndedScreen();
         return;
       }
-      if(x.res.status===403&&x.j&&x.j.campaign_expired===true){
-        kokoroRemoveThinkingRow();
-        patchSession({campaignExpired:true});
-        if(x.j.plan!==undefined&&x.j.plan!==null)patchSession({billingPlan:x.j.plan});
-        patchRallyFromResponse(x.j);
-        apiMsgs.pop();
-        var lr2=logEl.lastElementChild;if(lr2&&lr2.classList.contains("user"))lr2.remove();
-        inp.value=t;
-        showCampaignEndedScreen();
-        return;
-      }
       if(!x.res.ok){var er=(x.j&&x.j.error)||("エラー ("+x.res.status+")");var err=new Error(er);err._status=x.res.status;throw err}
       var msg=(x.j&&x.j.message)||"";if(!msg)throw new Error("応答が空でした");kokoroRemoveThinkingRow();patchRallyFromResponse(x.j);if(typeof x.j.limit==="number")LIM=x.j.limit;apiMsgs.push({role:"assistant",content:msg});addAiBubbleTypewriter(msg,function(aiRow){persistSnapshot();if(x.j&&x.j.saveOk===false)logErr("[会話保存]",new Error("保存に一部失敗した可能性があります"));scheduleAssistantTts(msg,aiRow)});
     })
-    .catch(function(e){kokoroRemoveThinkingRow();apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",translateErrorToJa(m),true);if(e&&e._status===429)updRallyRemain(0,trialDaysRemain,campaignDaysRemain)})
-    .finally(function(){sending=false;updRallyRemain(remainCount,trialDaysRemain,campaignDaysRemain)});
+    .catch(function(e){kokoroRemoveThinkingRow();apiMsgs.pop();var lr=logEl.lastElementChild;if(lr&&lr.classList.contains("user"))lr.remove();inp.value=t;var m=e&&e.message?e.message:"通信に失敗しました";if(e&&e._status===429)m="本日の上限回数に達しました";addBubble("ai",translateErrorToJa(m),true);if(e&&e._status===429)updRallyRemain(0)})
+    .finally(function(){sending=false;updRallyRemain(remainCount)});
 }
 
 inp.addEventListener("input",function(){if(remain()<=0||sending||typewriterBusy)return;bSend.disabled=!inp.value.trim()});
