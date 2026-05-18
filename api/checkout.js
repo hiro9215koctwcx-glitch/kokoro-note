@@ -71,6 +71,45 @@ async function resolveKokoroPromotionCodeId(stripe) {
   return exactC?.id ?? rowsC[0]?.id ?? null;
 }
 
+/** キャンペーン用：カード不要のサブスク作成に使う Stripe Customer（metadata に supabase_user_id） */
+async function getOrCreateStripeCustomerForCampaign(stripe, user) {
+  const email =
+    typeof user.email === "string" && user.email.trim()
+      ? user.email.trim()
+      : undefined;
+  if (email) {
+    const listed = await stripe.customers.list({ email, limit: 20 });
+    const rows = Array.isArray(listed.data) ? listed.data : [];
+    const byMeta = rows.find(
+      (c) => c?.metadata?.supabase_user_id === user.id
+    );
+    if (byMeta) return byMeta.id;
+    if (rows.length === 1) {
+      await stripe.customers.update(rows[0].id, {
+        metadata: {
+          ...(rows[0].metadata || {}),
+          supabase_user_id: user.id,
+        },
+      });
+      return rows[0].id;
+    }
+    if (rows.length > 1) {
+      const created = await stripe.customers.create({
+        email,
+        metadata: { supabase_user_id: user.id },
+      });
+      return created.id;
+    }
+  }
+  const created = await stripe.customers.create({
+    email: email || undefined,
+    metadata: { supabase_user_id: user.id },
+  });
+  return created.id;
+}
+
+const CAMPAIGN_APP_RETURN_URL = `${DEFAULT_SITE_ORIGIN}/`;
+
 async function handler(req, res) {
   setCors(res);
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -173,6 +212,45 @@ async function handler(req, res) {
       );
     }
 
+    const stripe = new Stripe(secret);
+
+    if (useKokoroCampaign) {
+      const promoId = await resolveKokoroPromotionCodeId(stripe);
+      if (!promoId) {
+        res.statusCode = 500;
+        return res.end(
+          JSON.stringify({
+            error:
+              "キャンペーンの Stripe プロモーションコードが見つかりません。STRIPE_CAMPAIGN_PROMOTION_CODE_ID を設定するか、KOKORO800 が有効か確認してください。",
+          })
+        );
+      }
+
+      const customerId = await getOrCreateStripeCustomerForCampaign(
+        stripe,
+        user
+      );
+
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId }],
+        discounts: [{ promotion_code: promoId }],
+        collection_method: "charge_automatically",
+        metadata: {
+          supabase_user_id: user.id,
+          plan_key: planKey,
+          kokoro_campaign: "1",
+        },
+      });
+
+      await stripe.subscriptions.update(subscription.id, {
+        cancel_at_period_end: true,
+      });
+
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ url: CAMPAIGN_APP_RETURN_URL }));
+    }
+
     const origin =
       typeof process.env.PUBLIC_SITE_ORIGIN === "string" &&
       process.env.PUBLIC_SITE_ORIGIN.trim()
@@ -189,7 +267,6 @@ async function handler(req, res) {
         process.env.STRIPE_CANCEL_URL.trim()) ||
       `${origin}/?checkout_cancel=1`;
 
-    const stripe = new Stripe(secret);
     const sessionPayload = {
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
@@ -210,22 +287,6 @@ async function handler(req, res) {
         : `${successUrlRaw}${successUrlRaw.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
     };
-
-    if (useKokoroCampaign) {
-      const promoId = await resolveKokoroPromotionCodeId(stripe);
-      if (!promoId) {
-        res.statusCode = 500;
-        return res.end(
-          JSON.stringify({
-            error:
-              "キャンペーンの Stripe プロモーションコードが見つかりません。STRIPE_CAMPAIGN_PROMOTION_CODE_ID を設定するか、KOKORO800 が有効か確認してください。",
-          })
-        );
-      }
-      sessionPayload.discounts = [{ promotion_code: promoId }];
-      sessionPayload.metadata.kokoro_campaign = "1";
-      sessionPayload.subscription_data.metadata.kokoro_campaign = "1";
-    }
 
     const session = await stripe.checkout.sessions.create(sessionPayload);
 
